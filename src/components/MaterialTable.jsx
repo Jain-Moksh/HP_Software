@@ -110,6 +110,125 @@ const EditDate = ({ field, value, onChange, onKeyDown }) => (
   />
 );
 
+const EditCombobox = ({ field, value, options, onChange, onAddNew, onKeyDown }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [typed, setTyped] = useState(value);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const wrapperRef = useRef(null);
+
+  // Filter options based on typed text
+  const filtered = options.filter(opt =>
+    opt.toLowerCase().includes(typed.toLowerCase())
+  );
+
+  const exactMatch = options.find(opt => opt.toLowerCase() === typed.toLowerCase());
+  const showAdd = typed.trim() !== '' && !exactMatch;
+
+  const handleSelect = (val) => {
+    onChange(field, val);
+    setTyped(val);
+    setIsOpen(false);
+  };
+
+  const handleAddNew = () => {
+    const newVal = typed.trim();
+    if (newVal) {
+      onAddNew(field, newVal);
+      onChange(field, newVal);
+    }
+    setIsOpen(false);
+  };
+
+  const handleLocalKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setIsOpen(true);
+      setHighlightedIndex(prev => Math.min(prev + 1, filtered.length + (showAdd ? 0 : -1)));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter') {
+      if (isOpen) {
+        if (highlightedIndex >= 0 && highlightedIndex < filtered.length) {
+          handleSelect(filtered[highlightedIndex]);
+          e.stopPropagation(); // don't trigger row save yet if we're just selecting
+        } else if (showAdd && highlightedIndex === filtered.length) {
+          handleAddNew();
+          e.stopPropagation();
+        } else {
+            // If nothing highlighted but text exists and matches something, select it maybe?
+            // Or just let it through to row save
+            onKeyDown(e);
+        }
+      } else {
+        onKeyDown(e);
+      }
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+      onKeyDown(e);
+    } else {
+      // For other keys, just ensure we are "open" if typing
+      setIsOpen(true);
+    }
+  };
+
+  // Close list on click outside
+  useEffect(() => {
+    const clickHandler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', clickHandler);
+    return () => document.removeEventListener('mousedown', clickHandler);
+  }, []);
+
+  return (
+    <div className="relative w-full" ref={wrapperRef} onClick={e => e.stopPropagation()}>
+      <input
+        type="text"
+        value={typed}
+        onChange={e => { setTyped(e.target.value); setIsOpen(true); setHighlightedIndex(-1); }}
+        onFocus={() => setIsOpen(true)}
+        onKeyDown={handleLocalKeyDown}
+        className={`${inputCls} text-center`}
+        placeholder="Type to search..."
+      />
+      
+      {isOpen && (
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-[#93C5FD] rounded shadow-lg max-h-48 overflow-y-auto ring-1 ring-black ring-opacity-5">
+          {filtered.map((opt, i) => (
+            <div
+              key={opt}
+              onClick={() => handleSelect(opt)}
+              onMouseEnter={() => setHighlightedIndex(i)}
+              className={`px-3 py-2 text-xs cursor-pointer transition-colors text-center ${
+                i === highlightedIndex ? 'bg-[#EFF6FF] text-[#2563EB]' : 'text-[#475569]'
+              }`}
+            >
+              {opt}
+            </div>
+          ))}
+          {showAdd && (
+            <div
+              onClick={handleAddNew}
+              onMouseEnter={() => setHighlightedIndex(filtered.length)}
+              className={`px-3 py-2 text-xs cursor-pointer font-bold border-t border-[#F1F5F9] text-center ${
+                highlightedIndex === filtered.length ? 'bg-[#EFF6FF] text-[#2563EB]' : 'text-[#2563EB]'
+              }`}
+            >
+              + Add New "{typed}"
+            </div>
+          )}
+          {filtered.length === 0 && !showAdd && (
+            <div className="px-3 py-2 text-xs text-[#94A3B8] italic text-center">No results found</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function MaterialTable() {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth(); // 0-indexed
@@ -119,6 +238,18 @@ export default function MaterialTable() {
   const [rows, setRows]               = useState(ALL_DATA);
   const [editingId, setEditingId]     = useState(null);   // which row is in edit mode
   const [draft, setDraft]             = useState(null);   // working copy of the row
+
+  // ── dynamic options list ────────────────────────────────────────────────
+  const [sellers, setSellers]         = useState([...new Set(ALL_DATA.map(r => r.seller))].sort());
+  const [jobbers, setJobbers]         = useState([...new Set(ALL_DATA.map(r => r.jobber))].sort());
+
+  const addOption = (field, newValue) => {
+    if (field === 'seller') {
+      setSellers(prev => [...new Set([...prev, newValue])].sort());
+    } else if (field === 'jobber') {
+      setJobbers(prev => [...new Set([...prev, newValue])].sort());
+    }
+  };
 
   const editRowRef = useRef(null); // ref on the <tr> that's being edited
 
@@ -308,12 +439,34 @@ export default function MaterialTable() {
 
                   {/* Seller */}
                   <td className="px-3 py-1.5 border-r border-[#E2E8F0] text-[#64748B] min-w-[120px] text-center">
-                    {isEditing ? <EditText field="seller" value={draft.seller} onChange={setField} onKeyDown={handleKeyDown} /> : <ViewText value={row.seller} text-center />}
+                    {isEditing ? (
+                      <EditCombobox 
+                        field="seller" 
+                        value={draft.seller} 
+                        options={sellers} 
+                        onChange={setField} 
+                        onAddNew={addOption}
+                        onKeyDown={handleKeyDown} 
+                      />
+                    ) : (
+                      <ViewText value={row.seller} text-center />
+                    )}
                   </td>
 
                   {/* Jobber */}
                   <td className="px-3 py-1.5 border-r border-[#E2E8F0] text-[#64748B] min-w-[120px] text-center">
-                    {isEditing ? <EditText field="jobber" value={draft.jobber} onChange={setField} onKeyDown={handleKeyDown} /> : <ViewText value={row.jobber} text-center />}
+                    {isEditing ? (
+                      <EditCombobox 
+                        field="jobber" 
+                        value={draft.jobber} 
+                        options={jobbers} 
+                        onChange={setField} 
+                        onAddNew={addOption}
+                        onKeyDown={handleKeyDown} 
+                      />
+                    ) : (
+                      <ViewText value={row.jobber} text-center />
+                    )}
                   </td>
 
                   {/* Date */}

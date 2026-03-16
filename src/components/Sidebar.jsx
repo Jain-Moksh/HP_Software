@@ -3,7 +3,7 @@ import { LayoutDashboard, Package, Menu, X, ChevronRight } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'materials', label: 'Materials', icon: Package },
+  { id: 'materials', label: 'Material-In', icon: Package },
 ];
 
 export default function Sidebar({ activePage, onNavigate }) {

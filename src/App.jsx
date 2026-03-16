@@ -2,12 +2,12 @@ import { useState } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
-import Materials from './pages/Materials';
+import MaterialIn from './pages/Material-In';
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
 
-  const Page = activePage === 'materials' ? Materials : Dashboard;
+  const Page = activePage === 'materials' ? MaterialIn : Dashboard;
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F8FAFC] font-sans">

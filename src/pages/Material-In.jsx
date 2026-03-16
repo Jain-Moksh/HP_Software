@@ -19,7 +19,7 @@ const TOOLBAR_ICONS = [
   { icon: Download,   label: 'Download'   },
 ];
 
-export default function Materials() {
+export default function MaterialIn() {
   return (
     <div className="p-6 flex flex-col h-full">
       {/* Page header */}
