@@ -3,11 +3,18 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
 import MaterialIn from './pages/Material-In';
+import MaterialOut from './pages/Material-Out';
+
+const PAGES = {
+  dashboard: Dashboard,
+  materials: MaterialIn,
+  'material-out': MaterialOut,
+};
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
 
-  const Page = activePage === 'materials' ? MaterialIn : Dashboard;
+  const Page = PAGES[activePage] || Dashboard;
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F8FAFC] font-sans">
