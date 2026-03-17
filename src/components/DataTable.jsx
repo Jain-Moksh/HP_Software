@@ -478,7 +478,7 @@ export default function DataTable({
       {/* ── Month & Year pagination ── */}
       <div className="mt-4 flex items-center justify-between gap-1.5 flex-wrap">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs font-medium text-[#64748B] mr-1">Month:</span>
+          <span className="text-xs font-medium text-[#64748B] mr-1">Months:</span>
           <div className="flex items-center gap-1 bg-[#F1F5F9] px-2 py-0.5 rounded border border-[#E2E8F0] mr-2">
             <span className="text-[10px] font-bold text-[#475569]">{filteredRows.length}</span>
             <span className="text-[10px] text-[#64748B]">Records</span>

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { LayoutDashboard, Package, PackageOpen, Menu, X, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Package, PackageOpen, ClipboardList, Menu, X, ChevronRight } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'materials', label: 'Material-In', icon: Package },
   { id: 'material-out', label: 'Material-Out', icon: PackageOpen },
+  { id: 'job-report', label: 'Job Report', icon: ClipboardList },
 ];
 
 export default function Sidebar({ activePage, onNavigate }) {
