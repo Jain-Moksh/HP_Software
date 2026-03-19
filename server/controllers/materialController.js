@@ -47,11 +47,49 @@ exports.addMaterial = async (req, res) => {
   }
 };
 
+// Update Material Entry
+exports.updateMaterial = async (req, res) => {
+  const { id } = req.params;
+  const {
+    type1,
+    type2,
+    material,
+    rate,
+    seller,
+    jobber,
+    date,
+    amount,
+    w,
+    b,
+    a
+  } = req.body;
+
+  try {
+    const query = `
+      UPDATE material_transactions
+      SET type1 = $1, type2 = $2, material = $3, rate = $4, seller = $5, jobber = $6, 
+          date = $7, amount = $8, w = $9, b = $10, a = $11
+      WHERE id = $12
+      RETURNING *
+    `;
+    const values = [type1, type2, material, rate, seller, jobber, date, amount, w, b, a, id];
+    const result = await db.query(query, values); // Corrected from pool.query to db.query
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Transaction not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error updating material:', err); // Added context to error message
+    res.status(500).json({ error: 'Failed to update material entry' }); // Changed from send("Server Error")
+  }
+};
+
 // Get All Material Entries
 exports.getMaterials = async (req, res) => {
   try {
-    const query = 'SELECT * FROM material_transactions ORDER BY date DESC, created_at DESC';
-    const result = await db.query(query);
+    const result = await db.query('SELECT * FROM material_transactions ORDER BY date DESC, id DESC');
     res.status(200).json(result.rows);
   } catch (error) {
     console.error('Error fetching materials:', error);

@@ -38,44 +38,6 @@ const calculateAmount = (row) => {
   return { ...row, amount: Math.round(total) };
 };
 
-// ─── data generator ──────────────────────────────────────────────────────────
-const generateMockData = () => {
-  const data = [];
-  let id = 1;
-
-  const createEntries = (monthIdx, year, count, materialBase) => {
-    for (let i = 1; i <= count; i++) {
-      const day = String(Math.floor(Math.random() * 28) + 1).padStart(2, '0');
-      const month = String(monthIdx + 1).padStart(2, '0');
-      const entry = {
-        id: id++,
-        type1: 100 + i,
-        type2: 200 + (i % 5),
-        material: `${materialBase} - Batch ${i}`,
-        rate: 70 + Math.floor(Math.random() * 50),
-        seller: ['Raj Traders', 'Kumar Supplies', 'Gupta Corp.', 'Steel Hub', 'Joshi Goods'][i % 5],
-        jobber: ['Mehta & Co.', 'Patel Bros.', 'Shah Traders', 'Iyer & Sons'][i % 4],
-        date: `${year}-${month}-${day}`,
-        w: i % 2 === 0,
-        b: i % 3 === 0,
-        a: i % 4 === 0,
-        _month: monthIdx,
-        _year: year,
-      };
-      entry.amount = calculateAmount(entry).amount;
-      data.push(entry);
-    }
-  };
-
-  createEntries(0, 2026, 30, 'HDPE Granules'); // Jan
-  createEntries(1, 2026, 20, 'NBR Rubber');    // Feb
-  createEntries(2, 2026, 25, 'PVC Pipes');     // Mar
-
-  return data;
-};
-
-const ALL_DATA = generateMockData();
-
 // ─── toolbar icons ───────────────────────────────────────────────────────────
 const TOOLBAR_ICONS = [
   { id: 'new',        icon: Plus,        label: 'New Entry'   },
@@ -141,6 +103,14 @@ export default function MaterialIn() {
 
   const handleInputChange = (field, value) => {
     let updatedRow = { ...newRow, [field]: value };
+    
+    // Mutual exclusion logic for type1 and type2
+    if (field === 'type1' && value !== '') {
+      updatedRow.type2 = '';
+    } else if (field === 'type2' && value !== '') {
+      updatedRow.type1 = '';
+    }
+
     if (field === 'type1' || field === 'type2' || field === 'rate' || field === 'b') {
       updatedRow = calculateAmount(updatedRow);
     }
@@ -174,6 +144,25 @@ export default function MaterialIn() {
     } catch (err) {
       console.error('Save error:', err);
       alert('Error connecting to server.');
+    }
+  };
+
+  const handleUpdate = async (updatedRow) => {
+    try {
+      const resp = await fetch(`http://localhost:5000/api/material/${updatedRow.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedRow),
+      });
+
+      if (!resp.ok) {
+        alert('Failed to update record.');
+        fetchData(); // Rollback local state
+      }
+    } catch (err) {
+      console.error('Update error:', err);
+      alert('Error connecting to server.');
+      fetchData(); // Rollback local state
     }
   };
 
@@ -247,8 +236,12 @@ export default function MaterialIn() {
                             type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
                             value={newRow[col.key]}
                             onChange={(e) => handleInputChange(col.key, e.target.value)}
+                            disabled={
+                              (col.key === 'type1' && Number(newRow.type2) > 0) || 
+                              (col.key === 'type2' && Number(newRow.type1) > 0)
+                            }
                             placeholder={col.label}
-                            className={`w-full bg-[#F1F5F9] border border-[#CBD5E1] rounded px-2 py-1.5 text-xs text-[#0F172A] outline-none focus:ring-1 focus:ring-[#2563EB] transition-all text-center`}
+                            className={`w-full bg-[#F1F5F9] border border-[#CBD5E1] rounded px-2 py-1.5 text-xs text-[#0F172A] outline-none focus:ring-1 focus:ring-[#2563EB] transition-all text-center ${(col.key === 'type1' && Number(newRow.type2) > 0) || (col.key === 'type2' && Number(newRow.type1) > 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
                           />
                         )}
                       </td>
@@ -294,6 +287,7 @@ export default function MaterialIn() {
             comboboxFields={{ seller: [], jobber: [] }}
             calculateFields={calculateAmount}
             checkboxRecalcFields={['b']}
+            onSave={handleUpdate}
           />
         )}
       </div>

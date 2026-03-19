@@ -9,8 +9,12 @@ const MONTHS = [
 // ─── formatters ──────────────────────────────────────────────────────────────
 const formatDate = (dateStr) => {
   if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-');
-  return `${d}-${m}-${y}`;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
 };
 
 // ─── shared input style ───────────────────────────────────────────────────────
@@ -18,7 +22,11 @@ const inputCls =
   'w-full bg-[#EFF6FF] border border-[#93C5FD] rounded px-1.5 py-0.5 text-xs text-[#0F172A] outline-none focus:ring-1 focus:ring-[#2563EB] placeholder:text-[#94A3B8]';
 
 // ─── helper components (outside to prevent remounting) ───────────────────────
-const ViewText = ({ value, cls = '' }) => <span className={cls}>{value}</span>;
+const ViewText = ({ value, type }) => (
+  <span className="block truncate text-center" title={value}>
+    {type === 'date' ? formatDate(value) : value}
+  </span>
+);
 
 const EditText = ({ field, value, onChange, onKeyDown, cls = '', autoFocus = false }) => (
   <input
@@ -32,13 +40,14 @@ const EditText = ({ field, value, onChange, onKeyDown, cls = '', autoFocus = fal
   />
 );
 
-const EditNum = ({ field, value, onChange, onKeyDown, cls = '' }) => (
+const EditNum = ({ field, value, onChange, onKeyDown, cls = '', disabled = false }) => (
   <input
     type="number"
     value={value}
     onChange={e => onChange(field, e.target.value)}
     onKeyDown={onKeyDown}
-    className={`${inputCls} text-center ${cls}`}
+    disabled={disabled}
+    className={`${inputCls} text-center ${cls} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     onClick={e => e.stopPropagation()}
   />
 );
@@ -272,10 +281,12 @@ export default function DataTable({
     });
     if (calculateFields) saved = calculateFields(saved);
     setRows(prev => prev.map(r => r.id === saved.id ? saved : r));
-    saveRow(saved);
+    if (onSave) {
+      onSave(saved);
+    }
     setEditingId(null);
     setDraft(null);
-  }, [draft, columns, calculateFields]);
+  }, [draft, columns, calculateFields, onSave]);
 
   // ── keyboard shortcuts ────────────────────────────────────────────────
   const handleKeyDown = (e) => {
@@ -302,7 +313,15 @@ export default function DataTable({
   // ── draft field update helper ─────────────────────────────────────────
   const setField = (field, value) => {
     setDraft(prev => {
-      const next = { ...prev, [field]: value };
+      let next = { ...prev, [field]: value };
+
+      // Mutual exclusion logic for type1 and type2
+      if (field === 'type1' && value !== '') {
+        next.type2 = '';
+      } else if (field === 'type2' && value !== '') {
+        next.type1 = '';
+      }
+
       if (calculateFields) {
         const recalced = calculateFields(next);
         return recalced;
@@ -353,8 +372,14 @@ export default function DataTable({
         return (
           <td key={col.key} className="px-3 py-1.5 border-r border-[#E2E8F0] font-mono text-center text-[#0F172A]" style={col.minWidth ? { minWidth: col.minWidth } : { maxWidth: '80px' }}>
             {isEditing
-              ? <EditNum field={col.key} value={draft[col.key]} onChange={setField} onKeyDown={handleKeyDown} />
-              : <ViewText value={col.prefix ? `${col.prefix}${value}` : value} />}
+              ? <EditNum 
+                  field={col.key} 
+                  value={draft[col.key]} 
+                  onChange={setField} 
+                  onKeyDown={handleKeyDown} 
+                  disabled={(col.key === 'type1' && Number(draft.type2) > 0) || (col.key === 'type2' && Number(draft.type1) > 0)}
+                />
+              : <ViewText value={col.prefix ? `${col.prefix}${value}` : value} type={col.type} />}
           </td>
         );
 
