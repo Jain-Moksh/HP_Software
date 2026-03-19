@@ -198,6 +198,11 @@ export default function DataTable({
   const [editingId, setEditingId]       = useState(null);
   const [draft, setDraft]               = useState(null);
 
+  // Sync rows when initialData changes externally (e.g. after a new entry save)
+  useEffect(() => {
+    setRows(initialData);
+  }, [initialData]);
+
   // ── dynamic combobox options ────────────────────────────────────────────
   const [comboOptions, setComboOptions] = useState(() => {
     const init = {};
