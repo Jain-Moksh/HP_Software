@@ -1,63 +1,274 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, TrendingUp, TrendingDown, Box } from 'lucide-react';
-import DataTable from '../components/DataTable';
+import { ArrowLeft, TrendingUp, TrendingDown, Box, Plus } from 'lucide-react';
+import DataTable, { EditCombobox } from '../components/DataTable';
 
-// ─── Transaction Table Columns ──────────────────────────────────────────────
-const COLUMNS = [
-  { 
-    key: 'tx_type', 
-    label: 'TX Type', 
-    type: 'text',
-    render: (val) => (
-      <span className={`font-bold text-xs ${val === 'IN' ? 'text-emerald-600' : 'text-rose-600'}`}>
-        {val}
-      </span>
-    )
-  },
+
+const IN_COLUMNS = [
+  { key: 'type1',    label: 'Type 1',    type: 'number' },
+  { key: 'type2',    label: 'Type 2',    type: 'number' },
+  { key: 'material', label: 'Material',  type: 'text', minWidth: '140px' },
+  { key: 'seller',   label: 'Seller',    type: 'combobox' },
+  { key: 'w',        label: 'W',         type: 'checkbox' },
+  { key: 'b',        label: 'B',         type: 'checkbox' },
+  { key: 'a',        label: 'A',         type: 'checkbox' },
+  { key: 'date',     label: 'Date',      type: 'date' },
+  { key: 'remark',   label: 'Remark',    type: 'text', minWidth: '160px' },
+];
+
+const OUT_COLUMNS = [
   { key: 'type1',    label: 'Type 1',    type: 'number' },
   { key: 'type2',    label: 'Type 2',    type: 'number' },
   { key: 'material', label: 'Material',  type: 'text', minWidth: '140px' },
   { key: 'rate',     label: 'Rate',      type: 'number', prefix: '₹' },
-  { key: 'seller',   label: 'Seller',    type: 'combobox', minWidth: '120px' },
-  { key: 'jobber',   label: 'Jobber',    type: 'combobox', minWidth: '120px' },
-  { key: 'date',     label: 'Date',      type: 'date', minWidth: '120px' },
+  { key: 'vendor',   label: 'Vendor',    type: 'combobox' },
+  { key: 'date',     label: 'Date',      type: 'date' },
   { key: 'amount',   label: 'Amount',    type: 'computed', prefix: '₹' },
-  { key: 'w',        label: 'W',         type: 'checkbox' },
-  { key: 'b',        label: 'B',         type: 'checkbox' },
-  { key: 'a',        label: 'A',         type: 'checkbox' },
+  { key: 'remark',   label: 'Remark',    type: 'text', minWidth: '160px' },
 ];
 
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const prepareTableData = (data, month, year, showDraftAdj = false) => {
+  if (!data && !showDraftAdj) return [];
+  
+  const allProcessed = (data || []).map(item => {
+    const d = item.date ? new Date(item.date) : new Date();
+    return {
+      ...item,
+      _month: item._month ?? d.getMonth(),
+      _year: item._year ?? d.getFullYear()
+    };
+  });
+
+  const filtered = allProcessed.filter(r => r._month === month && r._year === year);
+
+  // Split into Material and Adjustment rows
+  const materialRows = filtered.filter(r => r.tx_type !== 'OUT_ADJ');
+  const savedAdjRows = filtered.filter(r => r.tx_type === 'OUT_ADJ');
+
+  // Calculate Material Totals
+  const matTotals = materialRows.reduce((acc, row) => {
+    acc.type1 += (Number(row.type1) || 0);
+    acc.type2 += (Number(row.type2) || 0);
+    acc.amount += (Number(row.amount) || 0);
+    return acc;
+  }, { type1: 0, type2: 0, amount: 0 });
+
+  const result = [...materialRows];
+
+  // Intermediate Total Row
+  result.push({
+    id: `mat-total-${month}-${year}`,
+    type1: matTotals.type1,
+    type2: matTotals.type2,
+    material: '---',
+    rate: '---',
+    vendor: '---',
+    seller: '---',
+    remark: 'GROSS TOTAL',
+    amount: matTotals.amount,
+    isTotal: true,
+    isTotalHeader: true // to distinguish if needed
+  });
+
+  // Adjustment Rows + Draft
+  const adjGroup = [...savedAdjRows];
+  if (showDraftAdj) {
+    adjGroup.push({
+      id: 'draft-adj',
+      isDraft: true,
+      tx_type: 'OUT_ADJ',
+      date: new Date().toISOString().split('T')[0],
+      amount: 0,
+      remark: 'Adjustment',
+      type1: '---', type2: '---', material: '---', rate: '---', vendor: '---',
+      w: false, b: false, a: false
+    });
+  }
+
+  if (adjGroup.length > 0) {
+    result.push(...adjGroup);
+    
+    const adjSum = adjGroup.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+    
+    // Final Net Total Row
+    result.push({
+      id: `net-total-${month}-${year}`,
+      type1: matTotals.type1, // usually stock doesn't change with adj
+      type2: matTotals.type2,
+      material: '---',
+      rate: '---',
+      vendor: '---',
+      seller: '---',
+      remark: 'NET TOTAL',
+      amount: matTotals.amount - adjSum,
+      isTotal: true
+    });
+  }
+
+  return result;
+};
+
 export default function JobReportDetail({ jobber, onBack }) {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth();
+
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [masters, setMasters] = useState({ sellers: [], vendors: [], jobbers: [] });
+  
+  // Lifted Filter State
+   const [selectedYear, setSelectedYear] = useState(currentYear);
+   const [activeMonth, setActiveMonth]   = useState(currentMonth);
+   const [showAdjEntry, setShowAdjEntry] = useState(false);
+
+  const fetchMasters = async () => {
+    try {
+      const [sRes, vRes, jRes] = await Promise.all([
+        fetch('http://localhost:5000/api/sellers'),
+        fetch('http://localhost:5000/api/vendors'),
+        fetch('http://localhost:5000/api/jobbers')
+      ]);
+      const [sellers, vendors, jobbers] = await Promise.all([sRes.json(), vRes.json(), jRes.json()]);
+      setMasters({ sellers, vendors, jobbers });
+    } catch (err) {
+      console.error('Master fetch error:', err);
+    }
+  };
+
+  const ensureMasterRecord = async (type, name) => {
+    if (!name) return null;
+    const list = type === 'seller' ? masters.sellers : type === 'vendor' ? masters.vendors : masters.jobbers;
+    const existing = list.find(item => item.name.toLowerCase() === name.toLowerCase());
+    if (existing) return existing.id;
+
+    const apiPath = type === 'seller' ? 'sellers' : type === 'vendor' ? 'vendors' : 'jobbers';
+    try {
+      const resp = await fetch(`http://localhost:5000/api/${apiPath}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (resp.ok) {
+        const newRecord = await resp.json();
+        await fetchMasters(); 
+        return newRecord.id;
+      }
+    } catch (err) { console.error(err); }
+    return null;
+  };
+
+  const handleUpdate = async (updatedRow, type) => {
+    if (updatedRow.isTotal) {
+       fetchReport();
+       return;
+    }
+    try {
+      if (updatedRow.tx_type === 'OUT_ADJ' || updatedRow.isDraft) {
+        const isNew = updatedRow.isDraft;
+        const url = isNew 
+          ? `http://localhost:5000/api/adjustments`
+          : `http://localhost:5000/api/adjustments/${updatedRow.id}`;
+        
+        const payload = {
+          jobber_id: jobber.id || report?.jobberId || (await ensureMasterRecord('jobber', jobber.name)),
+          amount: updatedRow.amount,
+          date: updatedRow.date,
+          remark: updatedRow.remark
+        };
+
+        const resp = await fetch(url, {
+          method: isNew ? 'POST' : 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (resp.ok) {
+          setShowAdjEntry(false);
+          fetchReport();
+        } else {
+          alert('Failed to save adjustment.');
+        }
+        return;
+      }
+
+      const mode = type || updatedRow.tx_type;
+      const apiPath = mode === 'IN' ? 'in' : 'out';
+      const masterType = mode === 'IN' ? 'seller' : 'vendor';
+      
+      const mId = await ensureMasterRecord(masterType, updatedRow[masterType]);
+      const jId = await ensureMasterRecord('jobber', updatedRow.jobber || jobber.name);
+
+      if (!mId || !jId) return;
+
+      const payload = {
+        ...updatedRow,
+        [`${masterType}_id`]: mId,
+        jobber_id: jId
+      };
+
+      const resp = await fetch(`http://localhost:5000/api/transactions/${apiPath}/${updatedRow.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (resp.ok) {
+        fetchReport();
+      }
+    } catch (err) {
+      console.error('Update error:', err);
+    }
+  };
+
+  const handleDelete = async (id, password, tx_type) => {
+    try {
+      let url = `http://localhost:5000/api/transactions/${tx_type === 'IN' ? 'in' : 'out'}/${id}`;
+      if (tx_type === 'OUT_ADJ') {
+        url = `http://localhost:5000/api/adjustments/${id}`;
+      }
+
+      const resp = await fetch(url, {
+        method: 'DELETE',
+        headers: { 'x-delete-password': password }
+      });
+
+      if (resp.ok) {
+        fetchReport();
+      } else {
+        const error = await resp.json();
+        alert(error.message || 'Failed to delete record.');
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+    }
+  };
+
+  const fetchReport = async () => {
+    try {
+      const resp = await fetch(`http://localhost:5000/api/job-report/${encodeURIComponent(jobber.name)}`);
+      if (resp.ok) {
+        const json = await resp.json();
+        setReport(json);
+      } else {
+        setReport(null);
+      }
+    } catch (err) {
+      console.error('Failed to fetch job report:', err);
+      setReport(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchReport = async () => {
-      try {
-        const resp = await fetch(`http://localhost:5000/api/job-report/${encodeURIComponent(jobber.name)}`);
-        const json = await resp.json();
-        
-        // Map data for DataTable (_month, _year)
-        const mappedTransactions = json.transactions.map(item => {
-          const d = new Date(item.date);
-          return {
-            ...item,
-            _month: d.getMonth(),
-            _year: d.getFullYear()
-          };
-        });
-
-        setReport({
-          ...json,
-          transactions: mappedTransactions
-        });
-      } catch (err) {
-        console.error('Failed to fetch job report:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    if (jobber?.name) fetchReport();
+    if (jobber?.name) {
+        fetchReport();
+        fetchMasters();
+    }
   }, [jobber]);
 
   if (loading) {
@@ -77,85 +288,212 @@ export default function JobReportDetail({ jobber, onBack }) {
     );
   }
 
-  const { openingStock, transactions, closingStock } = report;
+  const allTransactions = report?.transactions || [];
+  const baseOpening = report?.openingStock || { type1: 0, type2: 0 };
+
+  // Calculate Dynamic Opening Stock (balance before the selected month/year)
+  const openingStock = allTransactions.reduce((acc, tx) => {
+    const d = new Date(tx.date);
+    const m = d.getMonth();
+    const y = d.getFullYear();
+    if (y < selectedYear || (y === selectedYear && m < activeMonth)) {
+      if (tx.tx_type === 'IN') {
+        acc.type1 += (Number(tx.type1) || 0);
+        acc.type2 += (Number(tx.type2) || 0);
+      } else if (tx.tx_type === 'OUT') {
+        acc.type1 -= (Number(tx.type1) || 0);
+        acc.type2 -= (Number(tx.type2) || 0);
+      }
+    }
+    return acc;
+  }, { ...baseOpening });
+
+  // Calculate net for the current selected month
+  const currentNet = allTransactions.reduce((acc, tx) => {
+    const d = new Date(tx.date);
+    const m = d.getMonth();
+    const y = d.getFullYear();
+    if (y === selectedYear && m === activeMonth) {
+      if (tx.tx_type === 'IN') {
+        acc.type1 += (Number(tx.type1) || 0);
+        acc.type2 += (Number(tx.type2) || 0);
+      } else if (tx.tx_type === 'OUT') {
+        acc.type1 -= (Number(tx.type1) || 0);
+        acc.type2 -= (Number(tx.type2) || 0);
+      }
+    }
+    return acc;
+  }, { type1: 0, type2: 0 });
+
+  const closingStock = {
+    type1: openingStock.type1 + currentNet.type1,
+    type2: openingStock.type2 + currentNet.type2
+  };
+
+  const inTransactions = allTransactions.filter(t => t.tx_type === 'IN');
+  const outTransactions = allTransactions.filter(t => t.tx_type === 'OUT' || t.tx_type === 'OUT_ADJ');
+
+  // Month filtering years
+  const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+  const visibleMonths = (selectedYear === currentYear) ? MONTHS.slice(0, currentMonth + 1) : MONTHS;
+
+  const handleAddNewOption = async (field, value) => {
+    await ensureMasterRecord(field, value);
+  };
 
   return (
-    <div className="p-6 flex flex-col h-full bg-[#F8FAFC]">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+    <div className="flex flex-col h-screen bg-[#F8FAFC]">
+      {/* ── Compact Sticky Header ── */}
+      <div className="flex-none bg-white border-b border-[#E2E8F0] px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-4">
           <button 
             onClick={onBack}
-            className="p-2 hover:bg-white rounded-lg border border-transparent hover:border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A] transition-all"
+            className="p-2 hover:bg-[#F1F5F9] rounded-lg text-[#64748B] hover:text-[#0F172A] transition-all"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h2 className="text-xl font-bold text-[#0F172A]">{jobber?.name || 'Jobber Report'}</h2>
-            <p className="text-sm text-[#64748B]">Monthly transaction and stock summary</p>
+            <h1 className="text-xl font-bold text-[#0F172A] flex items-center gap-2">
+              {jobber?.name} 
+              <span className="text-[10px] font-medium bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full uppercase tracking-wider">Jobber Report</span>
+            </h1>
+            <p className="text-xs text-[#64748B]">Overview & Transaction History</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-8">
+          <div className="flex flex-col items-end">
+             <span className="text-[10px] items-center gap-1 uppercase font-bold text-[#64748B] flex mb-1">
+                <Box size={10} className="text-blue-500" /> Opening Stock
+             </span>
+             <div className="flex gap-4">
+                <div className="text-right flex flex-col items-end">
+                  <span className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-tighter -mb-1">T1</span>
+                  <span className="text-xl font-extrabold text-[#0F172A] leading-tight">{openingStock.type1}</span>
+                </div>
+                <div className="text-right flex flex-col items-end">
+                  <span className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-tighter -mb-1">T2</span>
+                  <span className="text-xl font-extrabold text-[#0F172A] leading-tight">{openingStock.type2}</span>
+                </div>
+             </div>
+          </div>
+          <div className="w-[1px] h-10 bg-slate-200" />
+          <div className="flex flex-col items-end">
+             <span className="text-[10px] items-center gap-1 uppercase font-bold text-[#64748B] flex mb-1">
+                <Box size={10} className="text-emerald-500" /> Closing Stock
+             </span>
+             <div className="flex gap-4">
+                <div className="text-right flex flex-col items-end">
+                  <span className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-tighter -mb-1">T1</span>
+                  <span className="text-xl font-extrabold text-[#0F172A] leading-tight">{closingStock.type1}</span>
+                </div>
+                <div className="text-right flex flex-col items-end">
+                  <span className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-tighter -mb-1">T2</span>
+                  <span className="text-xl font-extrabold text-[#0F172A] leading-tight">{closingStock.type2}</span>
+                </div>
+             </div>
           </div>
         </div>
       </div>
 
-      {/* Stock Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-        {/* Opening Stock */}
-        <div className="bg-white p-6 rounded-xl border border-[#E2E8F0] shadow-sm">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 rounded bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Box size={18} />
-            </div>
-            <h3 className="font-bold text-[#0F172A]">Opening Stock</h3>
-          </div>
-          <div className="flex gap-x-12">
-            <div>
-              <p className="text-xs text-[#64748B] uppercase font-semibold">Type 1</p>
-              <p className="text-2xl font-bold text-[#0F172A]">{openingStock.type1}</p>
-            </div>
-            <div>
-              <p className="text-xs text-[#64748B] uppercase font-semibold">Type 2</p>
-              <p className="text-2xl font-bold text-[#0F172A]">{openingStock.type2}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Closing Stock */}
-        <div className="bg-white p-6 rounded-xl border border-[#E2E8F0] shadow-sm">
-          <div className="flex items-center gap-3 mb-4">
-            <div className={`w-8 h-8 rounded flex items-center justify-center ${closingStock.type1 > openingStock.type1 ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
-              {closingStock.type1 > openingStock.type1 ? <TrendingUp size={18} /> : <Box size={18} />}
-            </div>
-            <h3 className="font-bold text-[#0F172A]">Closing Stock</h3>
-          </div>
-          <div className="flex gap-x-12">
-            <div>
-              <p className="text-xs text-[#64748B] uppercase font-semibold">Type 1</p>
-              <p className="text-2xl font-bold text-[#0F172A]">{closingStock.type1}</p>
-            </div>
-            <div>
-              <p className="text-xs text-[#64748B] uppercase font-semibold">Type 2</p>
-              <p className="text-2xl font-bold text-[#0F172A]">{closingStock.type2}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Transaction Table */}
-      <div className="flex-1 overflow-hidden min-h-[400px]">
-        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm h-full flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-slate-50/50">
-            <h3 className="text-sm font-bold text-[#334155]">Transaction Records</h3>
-            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase tracking-wider">
-              {transactions.length} Records
+      {/* ── Fixed Split Body (No main scroll) ── */}
+      <div className="flex-1 p-4 flex flex-col gap-4 overflow-hidden">
+        {/* Table IN */}
+        <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden flex flex-col">
+          <div className="px-4 py-2 bg-[#F1F5F9] border-b border-[#E2E8F0] flex items-center justify-between">
+            <h3 className="text-xs font-bold text-[#0F172A] flex items-center gap-2">
+              <TrendingUp size={14} className="text-emerald-500" /> Material Inward (IN)
+            </h3>
+            <span className="text-[10px] font-bold text-[#64748B] bg-white px-2 py-0.5 rounded border border-[#E2E8F0]">
+               {inTransactions.filter(r => {
+                 const d = new Date(r.date);
+                 return d.getMonth() === activeMonth && d.getFullYear() === selectedYear;
+               }).length} Records
             </span>
           </div>
-          <div className="flex-1 p-1">
+          <div className="flex-1 overflow-auto">
             <DataTable 
-              columns={COLUMNS} 
-              initialData={transactions}
-              comboboxFields={{ seller: [], jobber: [] }}
+              columns={IN_COLUMNS}
+              initialData={prepareTableData(inTransactions, activeMonth, selectedYear)}
+              comboboxFields={{ 
+                seller: masters.sellers.map(s => s.name), 
+                jobber: masters.jobbers.map(j => j.name)
+              }}
               onSave={handleUpdate}
+              onAddNewOption={handleAddNewOption}
+              onDelete={(id, pass) => handleDelete(id, pass, 'IN')}
+              hideFilters={true}
             />
+          </div>
+        </div>
+
+        {/* Table OUT */}
+        <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden flex flex-col">
+          <div className="px-4 py-2 bg-[#F1F5F9] border-b border-[#E2E8F0] flex items-center justify-between">
+            <h3 className="text-xs font-bold text-[#0F172A] flex items-center gap-2">
+              <TrendingDown size={14} className="text-rose-500" /> Material Outward (OUT)
+            </h3>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setShowAdjEntry(true)}
+                className="p-1 hover:bg-white rounded border border-[#E2E8F0] text-rose-600 transition-all"
+                title="Add Deduction/Payment"
+              >
+                <Plus size={14} />
+              </button>
+              <span className="text-[10px] font-bold text-[#64748B] bg-white px-2 py-0.5 rounded border border-[#E2E8F0]">
+                {outTransactions.filter(r => {
+                   const d = new Date(r.date);
+                   return d.getMonth() === activeMonth && d.getFullYear() === selectedYear;
+                 }).length} Records
+              </span>
+            </div>
+          </div>
+          <div className="flex-1 overflow-auto">
+            <DataTable 
+              columns={OUT_COLUMNS}
+              initialData={prepareTableData(outTransactions, activeMonth, selectedYear, showAdjEntry)}
+              comboboxFields={{ 
+                vendor: masters.vendors.map(v => v.name),
+                jobber: masters.jobbers.map(j => j.name)
+              }}
+              onSave={handleUpdate}
+              onAddNewOption={handleAddNewOption}
+              onDelete={(id, pass, type) => handleDelete(id, pass, type || 'OUT')}
+              hideFilters={true}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Shared Footer Pagination ── */}
+      <div className="flex-none bg-white border-t border-[#E2E8F0] px-6 py-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 md:pb-0">
+            {visibleMonths.map((m, idx) => (
+              <button
+                key={m}
+                onClick={() => setActiveMonth(idx)}
+                className={`flex-none px-4 py-1 text-xs font-semibold rounded-lg border transition-all ${
+                  activeMonth === idx
+                    ? 'bg-[#2563EB] text-white border-[#1D4ED8] shadow-[0_2px_4px_rgba(37,99,235,0.2)]'
+                    : 'bg-[#F8FAFC] text-[#64748B] border-[#E2E8F0] hover:bg-white hover:text-[#0F172A]'
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 px-3 py-1 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
+             <span className="text-xs font-bold text-[#64748B]">Year:</span>
+             <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="bg-transparent text-xs font-bold text-[#0F172A] outline-none cursor-pointer"
+             >
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
+             </select>
           </div>
         </div>
       </div>

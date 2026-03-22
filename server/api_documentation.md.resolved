@@ -1,0 +1,82 @@
+# API Documentation & Testing Guide
+
+Use this guide to test the modular backend endpoints using Postman or cURL.
+
+## 1. Master Data (Jobbers, Sellers, Vendors)
+
+### **Jobbers**
+- **GET** `http://localhost:5000/api/jobbers`
+- **POST** `http://localhost:5000/api/jobbers`
+  ```json
+  { "name": "Moksh Jain" }
+  ```
+
+### **Sellers**
+- **GET** `http://localhost:5000/api/sellers`
+- **POST** `http://localhost:5000/api/sellers`
+  ```json
+  { "name": "Primary Seller Ltd" }
+  ```
+
+### **Vendors**
+- **GET** `http://localhost:5000/api/vendors`
+- **POST** `http://localhost:5000/api/vendors`
+  ```json
+  { "name": "Global Vendor Corp" }
+  ```
+
+---
+
+## 2. Transactions
+
+### **Transactions IN (Material In)**
+- **POST** `http://localhost:5000/api/transactions/in`
+  ```json
+  {
+    "jobber_id": 1,
+    "seller_id": 1,
+    "type1": 100,
+    "type2": 0,
+    "material": "PVC Resin",
+    "rate": 85,
+    "amount": 8500,
+    "date": "2026-03-20",
+    "w": true,
+    "b": false,
+    "a": false
+  }
+  ```
+
+### **Transactions OUT (Jobber Issue)**
+- **POST** `http://localhost:5000/api/transactions/out`
+  ```json
+  {
+    "jobber_id": 1,
+    "vendor_id": 1,
+    "type1": 50,
+    "type2": 25,
+    "material": "Processed PVC",
+    "rate": 120,
+    "amount": 9000,
+    "date": "2026-03-20",
+    "w": false,
+    "b": true,
+    "a": false
+  }
+  ```
+
+---
+
+## 3. Fetching Records
+
+- **IN by Jobber**: `GET http://localhost:5000/api/transactions/in/1`
+- **OUT by Jobber**: `GET http://localhost:5000/api/transactions/out/1`
+- **By Seller**: `GET http://localhost:5000/api/transactions/seller/1`
+- **By Vendor**: `GET http://localhost:5000/api/transactions/vendor/1`
+
+---
+
+## 4. Stock Calculation
+
+- **Jobber Stock Overview**: `GET http://localhost:5000/api/stock/jobber/1`
+  - Returns total sums of Type 1 and Type 2 across all IN and OUT records for that ID.

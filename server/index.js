@@ -1,33 +1,39 @@
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const materialRoutes = require('./routes/materialRoutes');
-const jobReportRoutes = require('./routes/jobReportRoutes');
+require('dotenv').config();
+
 const jobberRoutes = require('./routes/jobberRoutes');
+const sellerRoutes = require('./routes/sellerRoutes');
+const vendorRoutes = require('./routes/vendorRoutes');
+const transactionRoutes = require('./routes/transactionRoutes');
+const stockRoutes = require('./routes/stockRoutes');
+const jobReportRoutes = require('./routes/jobReportRoutes');
+const sellerReportRoutes = require('./routes/sellerReportRoutes');
+const materialRoutes = require('./routes/materialRoutes');
+const adjustmentRoutes = require('./routes/adjustmentRoutes');
+const sellerAdjustmentRoutes = require('./routes/sellerAdjustmentRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use('/api/material', materialRoutes);
-app.use('/api/job-report', jobReportRoutes);
+// Main Routes
 app.use('/api/jobbers', jobberRoutes);
+app.use('/api/sellers', sellerRoutes);
+app.use('/api/vendors', vendorRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/stock', stockRoutes);
+app.use('/api/job-report', jobReportRoutes);
+app.use('/api/seller-report', sellerReportRoutes);
+app.use('/api/material', materialRoutes);
+app.use('/api/adjustments', adjustmentRoutes);
 
-// Basic health check
 app.get('/', (req, res) => {
-  res.send('HP Accounting Backend is running');
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+    res.send('HP Accounting Backend Running');
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });

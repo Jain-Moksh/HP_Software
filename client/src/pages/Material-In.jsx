@@ -11,7 +11,7 @@ import {
   X,
   Save,
 } from 'lucide-react';
-import DataTable from '../components/DataTable';
+import DataTable, { EditCombobox } from '../components/DataTable';
 
 // ─── Material-In column definitions ──────────────────────────────────────────
 const COLUMNS = [
@@ -21,11 +21,12 @@ const COLUMNS = [
   { key: 'rate',     label: 'Rate',      type: 'number', prefix: '₹' },
   { key: 'seller',   label: 'Seller',    type: 'combobox', minWidth: '120px' },
   { key: 'jobber',   label: 'Jobber',    type: 'combobox', minWidth: '120px' },
-  { key: 'date',     label: 'Date',      type: 'date', minWidth: '120px' },
+  { key: 'date',     label: 'Date',      type: 'date', minWidth: '100px' },
   { key: 'amount',   label: 'Amount',    type: 'computed', prefix: '₹' },
   { key: 'w',        label: 'W',         type: 'checkbox' },
   { key: 'b',        label: 'B',         type: 'checkbox' },
   { key: 'a',        label: 'A',         type: 'checkbox' },
+  { key: 'remark',   label: 'Remark',    type: 'text', minWidth: '160px' },
 ];
 
 // ─── calculation helper ──────────────────────────────────────────────────────
@@ -56,7 +57,8 @@ const INITIAL_ROW = {
   rate: '',
   seller: '',
   jobber: '',
-  date: new Date().toISOString().split('T')[0],
+  date: '',
+  remark: '',
   w: false,
   b: false,
   a: false,
@@ -68,14 +70,14 @@ export default function MaterialIn() {
   const [showEntryRow, setShowEntryRow] = useState(false);
   const [newRow, setNewRow] = useState(INITIAL_ROW);
   const [loading, setLoading] = useState(true);
+  const [masters, setMasters] = useState({ sellers: [], jobbers: [] });
 
   // Fetch initial data
   const fetchData = async () => {
     try {
-      const resp = await fetch('http://localhost:5000/api/material');
+      const resp = await fetch('http://localhost:5000/api/transactions/in');
       const json = await resp.json();
       
-      // Map backend data to include _month and _year for DataTable
       const mapped = json.map(item => {
         const d = new Date(item.date);
         return {
@@ -92,13 +94,64 @@ export default function MaterialIn() {
     }
   };
 
+  const fetchMasters = async () => {
+    try {
+      const [sRes, jRes] = await Promise.all([
+        fetch('http://localhost:5000/api/sellers'),
+        fetch('http://localhost:5000/api/jobbers')
+      ]);
+      const [sellers, jobbers] = await Promise.all([sRes.json(), jRes.json()]);
+      setMasters({ sellers, jobbers });
+    } catch (err) {
+      console.error('Master fetch error:', err);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchMasters();
   }, []);
+
+  const ensureMasterRecord = async (type, name) => {
+    if (!name) return null;
+    const list = type === 'seller' ? masters.sellers : masters.jobbers;
+    const existing = list.find(item => item.name.toLowerCase() === name.toLowerCase());
+    if (existing) return existing.id;
+
+    const apiPath = type === 'seller' ? 'sellers' : 'jobbers';
+    try {
+      const resp = await fetch(`http://localhost:5000/api/${apiPath}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (resp.ok) {
+        const newRecord = await resp.json();
+        await fetchMasters(); 
+        return newRecord.id;
+      } else if (resp.status === 400) {
+         // Fallback: fetch masters again and try to find it (someone might have added it simultaneously)
+         await fetchMasters();
+         const refetch = await fetch(`http://localhost:5000/api/${apiPath}`);
+         const freshList = await refetch.json();
+         const found = freshList.find(item => item.name.toLowerCase() === name.toLowerCase());
+         if (found) return found.id;
+      }
+    } catch (err) { console.error(err); }
+    return null;
+  };
+
+  const handleAddNewOption = async (field, value) => {
+    // field is 'seller' or 'jobber'
+    await ensureMasterRecord(field, value);
+  };
 
   const handleToolbarClick = (id) => {
     if (id === 'new') setShowEntryRow(true);
-    if (id === 'refresh') fetchData();
+    if (id === 'refresh') {
+      fetchData();
+      fetchMasters();
+    }
   };
 
   const handleInputChange = (field, value) => {
@@ -116,30 +169,48 @@ export default function MaterialIn() {
     }
     setNewRow(updatedRow);
   };
-
   const handleSave = async () => {
     try {
-      // Data preparation
+      // Validation: All fields except Remark are required
+      if (!(newRow.type1 || newRow.type2)) {
+        alert('Please enter either Type 1 or Type 2');
+        return;
+      }
+      if (!newRow.material || !newRow.rate || !newRow.seller || !newRow.jobber || !newRow.date) {
+        alert('All fields except Remark are mandatory');
+        return;
+      }
+
+      // Auto-add master records if they don't exist
+      const sellerId = await ensureMasterRecord('seller', newRow.seller);
+      const jobberId = await ensureMasterRecord('jobber', newRow.jobber);
+
+      if (!sellerId || !jobberId) return;
+
       const entryToSave = {
         ...newRow,
+        jobber_id: jobberId,
+        seller_id: sellerId,
         type1: Number(newRow.type1) || 0,
         type2: Number(newRow.type2) || 0,
         rate: Number(newRow.rate) || 0,
         amount: Number(newRow.amount) || 0
       };
 
-      const resp = await fetch('http://localhost:5000/api/material', {
+      const resp = await fetch('http://localhost:5000/api/transactions/in', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entryToSave),
       });
 
       if (resp.ok) {
-        setShowEntryRow(false);
+        // setShowEntryRow(false); // Persistent entry row
         setNewRow(INITIAL_ROW);
-        fetchData(); // Refresh main table
-      } else {
-        alert('Failed to save data. Please check backend connection.');
+        fetchData();
+      }
+ else {
+        const error = await resp.json();
+        alert(error.error || 'Failed to save data.');
       }
     } catch (err) {
       console.error('Save error:', err);
@@ -149,20 +220,50 @@ export default function MaterialIn() {
 
   const handleUpdate = async (updatedRow) => {
     try {
-      const resp = await fetch(`http://localhost:5000/api/material/${updatedRow.id}`, {
+      const sellerId = await ensureMasterRecord('seller', updatedRow.seller);
+      const jobberId = await ensureMasterRecord('jobber', updatedRow.jobber);
+
+      if (!sellerId || !jobberId) return;
+
+      const payload = {
+        ...updatedRow,
+        seller_id: sellerId,
+        jobber_id: jobberId
+      };
+
+      const resp = await fetch(`http://localhost:5000/api/transactions/in/${updatedRow.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedRow),
+        body: JSON.stringify(payload),
       });
 
       if (!resp.ok) {
         alert('Failed to update record.');
-        fetchData(); // Rollback local state
+        fetchData();
       }
     } catch (err) {
       console.error('Update error:', err);
       alert('Error connecting to server.');
-      fetchData(); // Rollback local state
+      fetchData();
+    }
+  };
+
+  const handleDelete = async (id, password) => {
+    try {
+      const resp = await fetch(`http://localhost:5000/api/transactions/in/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-delete-password': password }
+      });
+
+      if (resp.ok) {
+        fetchData();
+      } else {
+        const error = await resp.json();
+        alert(error.message || 'Failed to delete record.');
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('Error connecting to server.');
     }
   };
 
@@ -227,6 +328,17 @@ export default function MaterialIn() {
                               className="accent-[#2563EB] w-4 h-4 cursor-pointer"
                             />
                           </div>
+                        ) : col.type === 'combobox' ? (
+                          <div className="flex justify-center">
+                            <EditCombobox
+                              field={col.key}
+                              value={newRow[col.key]}
+                              options={masters[col.key === 'seller' ? 'sellers' : 'jobbers'].map(m => m.name)}
+                              onChange={handleInputChange}
+                              onAddNewOption={handleAddNewOption}
+                              onKeyDown={() => {}}
+                            />
+                          </div>
                         ) : col.type === 'computed' ? (
                           <div className="text-center font-mono font-bold text-[#0F172A]">
                              {col.prefix}{newRow[col.key]?.toLocaleString()}
@@ -284,10 +396,15 @@ export default function MaterialIn() {
           <DataTable
             columns={COLUMNS}
             initialData={data}
-            comboboxFields={{ seller: [], jobber: [] }}
+            comboboxFields={{ 
+              seller: masters.sellers.map(s => s.name), 
+              jobber: masters.jobbers.map(j => j.name) 
+            }}
             calculateFields={calculateAmount}
             checkboxRecalcFields={['b']}
             onSave={handleUpdate}
+            onDelete={handleDelete}
+            onAddNewOption={handleAddNewOption}
           />
         )}
       </div>

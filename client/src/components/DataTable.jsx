@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Pencil, Save, Trash2 } from 'lucide-react';
 
 const MONTHS = [
@@ -63,15 +64,65 @@ const EditDate = ({ field, value, onChange, onKeyDown }) => (
   />
 );
 
-const EditCombobox = ({ field, value, options, onChange, onAddNew, onKeyDown }) => {
+const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm }) => {
+  const [password, setPassword] = useState('');
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl border border-[#E2E8F0] w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
+        <h3 className="text-lg font-bold text-[#0F172A] mb-2 flex items-center gap-2">
+           Delete Record
+        </h3>
+        <p className="text-sm text-[#64748B] mb-5">
+          Please enter the secure password to confirm deletion.
+        </p>
+        <input 
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Enter password"
+          autoFocus
+          className="w-full bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg px-4 py-2.5 text-sm mb-6 outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all"
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <button 
+            onClick={onCancel}
+            className="px-4 py-2.5 text-sm font-semibold text-[#64748B] bg-[#F1F5F9] hover:bg-[#E2E8F0] rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={() => {
+              onConfirm(password);
+              setPassword('');
+            }}
+            className="px-4 py-2.5 text-sm font-semibold text-white bg-[#EF4444] hover:bg-[#DC2626] rounded-lg shadow-sm shadow-red-200 transition-colors"
+          >
+            Confirm Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const EditCombobox = ({ field, value, options, onChange, onAddNew, onAddNewOption, onKeyDown }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [typed, setTyped] = useState(value);
+  const [typed, setTyped] = useState(value || '');
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
   const wrapperRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Sync internal state if prop changes (e.g. after save)
+  useEffect(() => {
+    setTyped(value || '');
+  }, [value]);
 
   // Filter options based on typed text
   const filtered = options.filter(opt =>
-    opt.toLowerCase().includes(typed.toLowerCase())
+    opt.toLowerCase().includes(typed.trim().toLowerCase())
   );
 
   const exactMatch = options.find(opt => opt.toLowerCase() === typed.toLowerCase());
@@ -86,7 +137,11 @@ const EditCombobox = ({ field, value, options, onChange, onAddNew, onKeyDown }) 
   const handleAddNew = () => {
     const newVal = typed.trim();
     if (newVal) {
-      onAddNew(field, newVal);
+      if (onAddNewOption) {
+        onAddNewOption(field, newVal);
+      } else if (onAddNew) {
+        onAddNew(field, newVal);
+      }
       onChange(field, newVal);
     }
     setIsOpen(false);
@@ -122,6 +177,30 @@ const EditCombobox = ({ field, value, options, onChange, onAddNew, onKeyDown }) 
     }
   };
 
+  // portal positioning logic
+  const updateCoords = () => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setCoords({
+        top: rect.bottom,
+        left: rect.left,
+        width: rect.width
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      updateCoords();
+      window.addEventListener('scroll', updateCoords, true);
+      window.addEventListener('resize', updateCoords);
+    }
+    return () => {
+      window.removeEventListener('scroll', updateCoords, true);
+      window.removeEventListener('resize', updateCoords);
+    };
+  }, [isOpen]);
+
   // Close list on click outside
   useEffect(() => {
     const clickHandler = (e) => {
@@ -136,17 +215,31 @@ const EditCombobox = ({ field, value, options, onChange, onAddNew, onKeyDown }) 
   return (
     <div className="relative w-full" ref={wrapperRef} onClick={e => e.stopPropagation()}>
       <input
+        ref={inputRef}
         type="text"
         value={typed}
-        onChange={e => { setTyped(e.target.value); setIsOpen(true); setHighlightedIndex(-1); }}
+        onChange={e => { 
+          const newVal = e.target.value;
+          setTyped(newVal); 
+          onChange(field, newVal); // Update parent state immediately
+          setIsOpen(true); 
+          setHighlightedIndex(-1); 
+        }}
         onFocus={() => setIsOpen(true)}
         onKeyDown={handleLocalKeyDown}
         className={`${inputCls} text-center`}
         placeholder="Type to search..."
       />
       
-      {isOpen && (
-        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-[#93C5FD] rounded shadow-lg max-h-48 overflow-y-auto ring-1 ring-black ring-opacity-5">
+      {isOpen && createPortal(
+        <div 
+          className="fixed z-[9999] bg-white border border-[#93C5FD] rounded shadow-xl max-h-48 overflow-y-auto ring-1 ring-black ring-opacity-5"
+          style={{
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+            width: `${coords.width}px`
+          }}
+        >
           {filtered.map((opt, i) => (
             <div
               key={opt}
@@ -173,7 +266,8 @@ const EditCombobox = ({ field, value, options, onChange, onAddNew, onKeyDown }) 
           {filtered.length === 0 && !showAdd && (
             <div className="px-3 py-2 text-xs text-[#94A3B8] italic text-center">No results found</div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -194,9 +288,12 @@ export default function DataTable({
   columns = [],
   initialData = [],
   onSave,
+  onDelete,
+  onAddNewOption, // New prop
   comboboxFields = {},
   calculateFields,
   checkboxRecalcFields = [],
+  hideFilters = false, // If true, suppresses internal month/year pagination
 }) {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
@@ -206,22 +303,32 @@ export default function DataTable({
   const [rows, setRows]                 = useState(initialData);
   const [editingId, setEditingId]       = useState(null);
   const [draft, setDraft]               = useState(null);
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, rowId: null, tx_type: null }); // Added deleteModal state
 
   // Sync rows when initialData changes externally (e.g. after a new entry save)
   useEffect(() => {
     setRows(initialData);
+    
+    // Auto-edit draft rows (like the new adjustment row)
+    const draftRow = initialData.find(r => r.isDraft);
+    if (draftRow) {
+      setEditingId(draftRow.id);
+      setDraft({ ...draftRow });
+    }
   }, [initialData]);
 
   // ── dynamic combobox options ────────────────────────────────────────────
-  const [comboOptions, setComboOptions] = useState(() => {
-    const init = {};
+  const [comboOptions, setComboOptions] = useState({});
+
+  useEffect(() => {
+    const nextOptions = {};
     for (const key of Object.keys(comboboxFields)) {
       const fromProps = comboboxFields[key] || [];
-      const fromData = [...new Set(initialData.map(r => r[key]).filter(Boolean))];
-      init[key] = [...new Set([...fromProps, ...fromData])].sort();
+      const fromData = [...new Set(rows.map(r => r[key]).filter(Boolean))];
+      nextOptions[key] = [...new Set([...fromProps, ...fromData])].sort();
     }
-    return init;
-  });
+    setComboOptions(nextOptions);
+  }, [comboboxFields, rows]);
 
   const addOption = (field, newValue) => {
     setComboOptions(prev => ({
@@ -241,7 +348,9 @@ export default function DataTable({
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
   // ── filtered data for display ─────────────────────────────────────────
-  const filteredRows = rows.filter(r => r._month === activeMonth && r._year === selectedYear);
+  const filteredRows = hideFilters 
+    ? rows 
+    : rows.filter(r => r.isTotal || (r._month === activeMonth && r._year === selectedYear));
 
   // ── save handler ──────────────────────────────────────────────────────
   const saveRow = async (row) => {
@@ -287,6 +396,18 @@ export default function DataTable({
     setEditingId(null);
     setDraft(null);
   }, [draft, columns, calculateFields, onSave]);
+
+  const handleDeleteRequest = (e, row) => {
+    e.stopPropagation();
+    setDeleteModal({ isOpen: true, rowId: row.id, tx_type: row.tx_type });
+  };
+
+  const confirmDelete = (password) => {
+    if (onDelete) {
+      onDelete(deleteModal.rowId, password, deleteModal.tx_type);
+    }
+    setDeleteModal({ isOpen: false, rowId: null, tx_type: null });
+  };
 
   // ── keyboard shortcuts ────────────────────────────────────────────────
   const handleKeyDown = (e) => {
@@ -335,6 +456,18 @@ export default function DataTable({
 
   // ── render a single cell based on column type ─────────────────────────
   const renderCell = (col, row, isEditing, idx) => {
+    // Hide inputs for non-adjustment fields if it's an adjustment row
+    const isAdjRow = row.tx_type === 'OUT_ADJ';
+    const adjFieldsToHide = ['type1', 'type2', 'material', 'rate', 'vendor', 'seller'];
+    
+    if (isAdjRow && adjFieldsToHide.includes(col.key)) {
+      return (
+        <td key={col.key} className="px-3 py-1.5 border-r border-[#E2E8F0] text-center text-slate-400">
+          ---
+        </td>
+      );
+    }
+
     const value = isEditing ? draft[col.key] : row[col.key];
 
     // Support custom render function for non-editing mode
@@ -350,18 +483,22 @@ export default function DataTable({
       case 'checkbox':
         return (
           <td key={col.key} className={`px-3 py-1.5 text-center ${idx < columns.length - 1 ? 'border-r border-[#E2E8F0]' : ''}`}>
-            <input
-              type="checkbox"
-              checked={isEditing ? draft[col.key] : row[col.key]}
-              onChange={() => toggleCheckbox(row, col.key)}
-              className="accent-[#2563EB] w-3.5 h-3.5 cursor-pointer"
-            />
+            {value === '---' ? (
+              <span className="text-slate-400">---</span>
+            ) : (
+              <input
+                type="checkbox"
+                checked={isEditing ? draft[col.key] : row[col.key]}
+                onChange={() => toggleCheckbox(row, col.key)}
+                className="accent-[#2563EB] w-3.5 h-3.5 cursor-pointer"
+              />
+            )}
           </td>
         );
 
       case 'date':
         return (
-          <td key={col.key} className={`px-3 py-1.5 border-r border-[#E2E8F0] font-mono text-xs text-[#64748B] text-center`} style={col.minWidth ? { minWidth: col.minWidth } : { minWidth: '120px' }}>
+          <td key={col.key} className={`px-3 py-1.5 border-r border-[#E2E8F0] font-mono text-xs text-[#64748B] text-center w-[100px] whitespace-nowrap`} style={col.minWidth ? { minWidth: col.minWidth } : { minWidth: '100px' }}>
             {isEditing
               ? <EditDate field={col.key} value={draft[col.key]} onChange={setField} onKeyDown={handleKeyDown} />
               : <ViewText value={formatDate(row[col.key])} />}
@@ -379,7 +516,10 @@ export default function DataTable({
                   onKeyDown={handleKeyDown} 
                   disabled={(col.key === 'type1' && Number(draft.type2) > 0) || (col.key === 'type2' && Number(draft.type1) > 0)}
                 />
-              : <ViewText value={col.prefix ? `${col.prefix}${value}` : value} type={col.type} />}
+              : <ViewText value={
+                  (value === '---') ? '---' : 
+                  (col.prefix ? `${col.prefix}${value}` : value)
+                } type={col.type} />}
           </td>
         );
 
@@ -388,7 +528,14 @@ export default function DataTable({
           <td key={col.key} className="px-3 py-1.5 border-r border-[#E2E8F0] font-mono font-semibold text-center text-[#0F172A]" style={col.minWidth ? { minWidth: col.minWidth } : { maxWidth: '100px' }}>
             {isEditing
               ? <EditNum field={col.key} value={draft[col.key]} onChange={setField} onKeyDown={handleKeyDown} />
-              : <ViewText value={col.prefix ? `${col.prefix}${Number(value).toLocaleString()}` : Number(value).toLocaleString()} />}
+              : <ViewText value={
+                  (value === '---') ? '---' : 
+                  (value === undefined || value === null || value === '') 
+                    ? '' 
+                    : col.prefix 
+                      ? `${col.prefix}${Number(value).toLocaleString()}` 
+                      : Number(value).toLocaleString()
+                } />}
           </td>
         );
 
@@ -402,6 +549,7 @@ export default function DataTable({
                 options={comboOptions[col.key] || []}
                 onChange={setField}
                 onAddNew={addOption}
+                onAddNewOption={onAddNewOption}
                 onKeyDown={handleKeyDown}
               />
             ) : (
@@ -413,7 +561,7 @@ export default function DataTable({
       case 'text':
       default:
         return (
-          <td key={col.key} className="px-3 py-1.5 border-r border-[#E2E8F0] font-medium text-center text-[#0F172A]" style={col.minWidth ? { minWidth: col.minWidth } : { minWidth: '140px' }}>
+          <td key={col.key} className="px-3 py-1.5 border-r border-[#E2E8F0] font-medium text-center text-[#0F172A] max-w-[150px]" style={col.minWidth ? { minWidth: col.minWidth } : { minWidth: '140px' }}>
             {isEditing
               ? <EditText field={col.key} value={draft[col.key]} onChange={setField} onKeyDown={handleKeyDown} autoFocus={col.autoFocus} />
               : <ViewText value={row[col.key]} />}
@@ -447,11 +595,13 @@ export default function DataTable({
             {filteredRows.map((row, idx) => {
               const isEditing = editingId === row.id;
               const rowCls = `border-b border-[#E2E8F0] transition-colors ${
-                isEditing
-                  ? 'bg-[#EFF6FF] ring-2 ring-inset ring-[#93C5FD]'
-                  : idx % 2 === 0
-                    ? 'bg-white hover:bg-[#F1F5F9]'
-                    : 'bg-[#F8FAFC] hover:bg-[#F1F5F9]'
+                row.isTotal
+                  ? 'bg-slate-50 font-bold'
+                  : isEditing
+                    ? 'bg-[#EFF6FF] ring-2 ring-inset ring-[#93C5FD]'
+                    : idx % 2 === 0
+                      ? 'bg-white hover:bg-[#F1F5F9]'
+                      : 'bg-[#F8FAFC] hover:bg-[#F1F5F9]'
               }`;
 
               return (
@@ -466,34 +616,38 @@ export default function DataTable({
                   </td>
 
                   {/* Actions */}
-                  <td className="px-3 py-1.5 border-r border-[#E2E8F0] whitespace-nowrap text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      {isEditing ? (
-                        <button
-                          title="Save"
-                          onMouseDown={e => { e.stopPropagation(); commitEdit(); }}
-                          className="w-6 h-6 flex items-center justify-center rounded bg-[#2563EB] hover:bg-[#1D4ED8] text-white transition-colors"
-                        >
-                          <Save size={13} />
-                        </button>
-                      ) : (
-                        <button
-                          title="Edit"
-                          onClick={() => startEdit(row)}
-                          className="w-6 h-6 flex items-center justify-center rounded hover:bg-blue-50 text-[#2563EB] transition-colors"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                      )}
+                  <td className="px-3 py-1.5 border-r border-[#E2E8F0] whitespace-nowrap text-center w-[80px]">
+                    {row.isTotal ? (
+                      <span className="font-bold text-[#0F172A] text-xs">TOTAL</span>
+                    ) : (
+                      <div className="flex items-center justify-center gap-1.5">
+                        {isEditing ? (
+                          <button
+                            title="Save"
+                            onMouseDown={e => { e.stopPropagation(); commitEdit(); }}
+                            className="w-6 h-6 flex items-center justify-center rounded bg-[#2563EB] hover:bg-[#1D4ED8] text-white transition-colors"
+                          >
+                            <Save size={13} />
+                          </button>
+                        ) : (
+                          <button
+                            title="Edit"
+                            onClick={() => startEdit(row)}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-blue-50 text-[#2563EB] transition-colors"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
 
-                      <button
-                        title="Delete"
-                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-red-500 transition-colors"
-                        onClick={() => setRows(prev => prev.filter(r => r.id !== row.id))}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+                        <button
+                          title="Delete"
+                          className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-red-500 transition-colors"
+                          onClick={(e) => handleDeleteRequest(e, row)}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
                   </td>
 
                   {/* Dynamic columns */}
@@ -506,48 +660,55 @@ export default function DataTable({
       </div>
 
       {/* ── Month & Year pagination ── */}
-      <div className="mt-4 flex items-center justify-between gap-1.5 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs font-medium text-[#64748B] mr-1">Months:</span>
-          <div className="flex items-center gap-1 bg-[#F1F5F9] px-2 py-0.5 rounded border border-[#E2E8F0] mr-2">
-            <span className="text-[10px] font-bold text-[#475569]">{filteredRows.length}</span>
-            <span className="text-[10px] text-[#64748B]">Records</span>
-          </div>
-          {visibleMonths.map((month, idx) => (
-            <button
-              key={month}
-              onClick={() => setActiveMonth(idx)}
-              className={`px-3 py-1 text-xs rounded border transition-colors ${
-                activeMonth === idx
-                  ? 'bg-[#2563EB] text-white border-[#2563EB] font-semibold'
-                  : 'bg-white text-[#64748B] border-[#E2E8F0] hover:bg-[#F1F5F9] hover:text-[#0F172A]'
-              }`}
-            >
-              {month}
-            </button>
-          ))}
-        </div>
-
-        {/* Year Dropdown */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-[#64748B]">Year:</span>
-          <select
-            value={selectedYear}
-            onChange={(e) => {
-              const yr = Number(e.target.value);
-              setSelectedYear(yr);
-              if (yr === currentYear && activeMonth > currentMonth) {
-                setActiveMonth(currentMonth);
-              }
-            }}
-            className="text-xs bg-white border border-[#E2E8F0] rounded px-2 py-1 outline-none text-[#0F172A] focus:ring-1 focus:ring-[#2563EB]"
-          >
-            {years.map(y => (
-              <option key={y} value={y}>{y}</option>
+      {!hideFilters && (
+        <div className="mt-4 flex items-center justify-between gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-medium text-[#64748B] mr-1">Months:</span>
+            <div className="flex items-center gap-1 bg-[#F1F5F9] px-2 py-0.5 rounded border border-[#E2E8F0] mr-2">
+              <span className="text-[10px] font-bold text-[#475569]">{filteredRows.length}</span>
+              <span className="text-[10px] text-[#64748B]">Records</span>
+            </div>
+            {visibleMonths.map((month, idx) => (
+              <button
+                key={month}
+                onClick={() => setActiveMonth(idx)}
+                className={`px-3 py-1 text-xs rounded border transition-colors ${
+                  activeMonth === idx
+                    ? 'bg-[#2563EB] text-white border-[#2563EB] font-semibold'
+                    : 'bg-white text-[#64748B] border-[#E2E8F0] hover:bg-[#F1F5F9] hover:text-[#0F172A]'
+                }`}
+              >
+                {month}
+              </button>
             ))}
-          </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-[#64748B]">Year:</span>
+            <select
+              value={selectedYear}
+              onChange={(e) => {
+                const yr = Number(e.target.value);
+                setSelectedYear(yr);
+                if (yr === currentYear && activeMonth > currentMonth) {
+                  setActiveMonth(currentMonth);
+                }
+              }}
+              className="text-xs bg-white border border-[#E2E8F0] rounded px-2 py-1 outline-none text-[#0F172A] focus:ring-1 focus:ring-[#2563EB]"
+            >
+              {years.map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
         </div>
-      </div>
+      )}
+
+      <DeleteConfirmModal 
+        isOpen={deleteModal.isOpen} 
+        onCancel={() => setDeleteModal({ isOpen: false, rowId: null })}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

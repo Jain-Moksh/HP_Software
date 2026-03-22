@@ -109,3 +109,27 @@ exports.getJobbers = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch jobbers' });
   }
 };
+
+// Delete Material Entry
+exports.deleteMaterial = async (req, res) => {
+  const { id } = req.params;
+  const password = req.headers['x-delete-password'];
+
+  if (password !== process.env.del_pass) {
+    return res.status(403).json({ message: "Incorrect password" });
+  }
+
+  try {
+    const query = 'DELETE FROM material_transactions WHERE id = $1 RETURNING *';
+    const result = await db.query(query, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Transaction not found" });
+    }
+
+    res.json({ message: "Transaction deleted successfully", deleted: result.rows[0] });
+  } catch (err) {
+    console.error('Error deleting material:', err);
+    res.status(500).json({ error: 'Failed to delete material entry' });
+  }
+};

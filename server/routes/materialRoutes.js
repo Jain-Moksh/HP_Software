@@ -9,5 +9,6 @@ router.post('/', materialController.addMaterial);
 router.get('/', materialController.getMaterials);
 
 router.put('/:id', materialController.updateMaterial);
+router.delete('/:id', materialController.deleteMaterial);
 
 module.exports = router;

@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const materialController = require('../controllers/materialController');
+const jobberController = require('../controllers/jobberController');
 
-// GET /api/jobbers - Get distinct jobber names
-router.get('/', materialController.getJobbers);
+router.get('/', jobberController.getJobbers);
+router.post('/', jobberController.createJobber);
 
 module.exports = router;

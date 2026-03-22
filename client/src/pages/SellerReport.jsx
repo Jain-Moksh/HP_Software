@@ -1,24 +1,23 @@
 import { useState, useEffect } from 'react';
 import { ClipboardList, ChevronRight } from 'lucide-react';
 
-export default function JobReport({ onViewReport }) {
-  const [jobbers, setJobbers] = useState([]);
+export default function SellerReport({ onViewReport }) {
+  const [sellers, setSellers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchJobbers = async () => {
+    const fetchSellers = async () => {
       try {
-        const resp = await fetch('http://localhost:5000/api/jobbers');
+        const resp = await fetch('http://localhost:5000/api/sellers');
         const json = await resp.json();
-        // json is already an array of objects: [{id, name, ...}]
-        setJobbers(json);
+        setSellers(json);
       } catch (err) {
-        console.error('Failed to fetch jobbers:', err);
+        console.error('Failed to fetch sellers:', err);
       } finally {
         setLoading(false);
       }
     };
-    fetchJobbers();
+    fetchSellers();
   }, []);
 
   return (
@@ -26,8 +25,8 @@ export default function JobReport({ onViewReport }) {
       {/* Page header */}
       <div className="flex items-start justify-between mb-8 flex-shrink-0">
         <div>
-          <h2 className="text-xl font-bold text-[#0F172A]">Job Reports</h2>
-          <p className="text-sm text-[#64748B] mt-1">Select a jobber to view their detailed material transaction report</p>
+          <h2 className="text-xl font-bold text-[#0F172A]">Seller Reports</h2>
+          <p className="text-sm text-[#64748B] mt-1">Select a seller to view their detailed supply transaction report</p>
         </div>
         <div className="p-2.5 bg-white border border-[#E2E8F0] rounded-lg shadow-sm text-[#2563EB]">
           <ClipboardList size={20} />
@@ -35,17 +34,17 @@ export default function JobReport({ onViewReport }) {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center p-12 text-sm text-[#64748B]">Loading jobbers...</div>
-      ) : jobbers.length === 0 ? (
+        <div className="flex items-center justify-center p-12 text-sm text-[#64748B]">Loading sellers...</div>
+      ) : sellers.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-dashed border-[#E2E8F0]">
-          <p className="text-sm text-[#64748B]">No jobbers found in the database.</p>
+          <p className="text-sm text-[#64748B]">No sellers found in the database.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {jobbers.map((jobber) => (
+          {sellers.map((seller) => (
             <button
-              key={jobber.id}
-              onClick={() => onViewReport(jobber)}
+              key={seller.id}
+              onClick={() => onViewReport(seller)}
               className="group bg-white p-6 rounded-xl border border-[#E2E8F0] shadow-sm hover:shadow-md hover:border-[#2563EB] transition-all duration-200 text-left relative overflow-hidden"
             >
               {/* Hover accent */}
@@ -54,10 +53,10 @@ export default function JobReport({ onViewReport }) {
               <div className="flex flex-col h-full justify-between">
                 <div>
                   <h3 className="text-lg font-bold text-[#0F172A] group-hover:text-[#2563EB] transition-colors">
-                    {jobber.name}
+                    {seller.name}
                   </h3>
                   <p className="text-xs text-[#64748B] mt-1 uppercase tracking-wider font-semibold">
-                    Jobber Unit
+                    Supply Unit
                   </p>
                 </div>
 

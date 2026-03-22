@@ -5,43 +5,65 @@ exports.getJobReport = async (req, res) => {
   try {
     const { jobber } = req.params;
 
-    // 1. Fetch all transactions for that jobber
-    const query = 'SELECT * FROM material_transactions WHERE jobber = $1 ORDER BY date ASC';
-    const result = await db.query(query, [jobber]);
-    const transactions = result.rows;
+    // 1. Find jobber ID from name
+    const jobberResult = await db.query('SELECT id FROM jobbers WHERE name = $1', [jobber]);
+    if (jobberResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Jobber not found' });
+    }
+    const jobberId = jobberResult.rows[0].id;
 
-    // 2. Separate transactions: IN and OUT
-    // 3. Calculate Opening Stock (Return 0 for now as per instructions)
-    const openingStock = {
-      type1: 0,
-      type2: 0
-    };
+    // 2. Fetch IN transactions
+    const inRes = await db.query(`
+        SELECT t.*, 'IN' as tx_type, s.name as seller 
+        FROM transactions_in t
+        LEFT JOIN sellers s ON t.seller_id = s.id
+        WHERE t.jobber_id = $1
+    `, [jobberId]);
 
-    // 4. Calculate totals and 5. Closing Stock
-    let totalInType1 = 0;
-    let totalInType2 = 0;
-    let totalOutType1 = 0;
-    let totalOutType2 = 0;
+    // 3. Fetch OUT transactions
+    const outRes = await db.query(`
+        SELECT t.*, 'OUT' as tx_type, v.name as vendor
+        FROM transactions_out t
+        LEFT JOIN vendors v ON t.vendor_id = v.id
+        WHERE t.jobber_id = $1
+    `, [jobberId]);
 
-    transactions.forEach(tx => {
-      const t1 = parseFloat(tx.type1) || 0;
-      const t2 = parseFloat(tx.type2) || 0;
+    // 4. Fetch Adjustments (Payments/Deductions)
+    const adjRes = await db.query(`
+        SELECT *, 'OUT_ADJ' as tx_type 
+        FROM jobber_adjustments 
+        WHERE jobber_id = $1
+    `, [jobberId]);
 
-      if (tx.tx_type === 'IN') {
-        totalInType1 += t1;
-        totalInType2 += t2;
-      } else if (tx.tx_type === 'OUT') {
-        totalOutType1 += t1;
-        totalOutType2 += t2;
-      }
+    // 5. Combine and sort
+    const transactions = [...inRes.rows, ...outRes.rows, ...adjRes.rows].sort((a, b) => 
+        new Date(b.created_at) - new Date(a.created_at)
+    );
+
+    // 5. Calculate Stock
+    const openingStock = { type1: 0, type2: 0 };
+    
+    let totalInT1 = 0, totalInT2 = 0;
+    let totalOutT1 = 0, totalOutT2 = 0;
+
+    inRes.rows.forEach(tx => {
+        totalInT1 += Number(tx.type1) || 0;
+        totalInT2 += Number(tx.type2) || 0;
+    });
+
+    outRes.rows.forEach(tx => {
+        totalOutT1 += Number(tx.type1) || 0;
+        totalOutT2 += Number(tx.type2) || 0;
     });
 
     const closingStock = {
-      type1: openingStock.type1 + totalInType1 - totalOutType1,
-      type2: openingStock.type2 + totalInType2 - totalOutType2
+      type1: openingStock.type1 + totalInT1 - totalOutT1,
+      type2: openingStock.type2 + totalInT2 - totalOutT2
     };
 
-    res.status(200).json({
+    res.json({
+      jobberId,
+      jobberName: jobber,
       openingStock,
       transactions,
       closingStock

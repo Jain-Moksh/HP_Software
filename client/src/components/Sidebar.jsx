@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { id: 'materials', label: 'Material-In', icon: Package },
   { id: 'material-out', label: 'Material-Out', icon: PackageOpen },
   { id: 'job-report', label: 'Job Report', icon: ClipboardList },
+  { id: 'seller-report', label: 'Seller Report', icon: ClipboardList },
 ];
 
 export default function Sidebar({ activePage, onNavigate }) {
