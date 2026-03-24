@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Pencil, Save, Trash2 } from 'lucide-react';
+import DateField from './DateField';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -15,7 +16,7 @@ const formatDate = (dateStr) => {
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
-  return `${day}-${month}-${year}`;
+  return `${day}/${month}/${year}`;
 };
 
 // ─── shared input style ───────────────────────────────────────────────────────
@@ -53,16 +54,6 @@ const EditNum = ({ field, value, onChange, onKeyDown, cls = '', disabled = false
   />
 );
 
-const EditDate = ({ field, value, onChange, onKeyDown }) => (
-  <input
-    type="date"
-    value={value}
-    onChange={e => onChange(field, e.target.value)}
-    onKeyDown={onKeyDown}
-    className={`${inputCls} text-center`}
-    onClick={e => e.stopPropagation()}
-  />
-);
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm }) => {
   const [password, setPassword] = useState('');
@@ -500,7 +491,7 @@ export default function DataTable({
         return (
           <td key={col.key} className={`px-3 py-1.5 border-r border-[#E2E8F0] font-mono text-xs text-[#64748B] text-center w-[100px] whitespace-nowrap`} style={col.minWidth ? { minWidth: col.minWidth } : { minWidth: '100px' }}>
             {isEditing
-              ? <EditDate field={col.key} value={draft[col.key]} onChange={setField} onKeyDown={handleKeyDown} />
+              ? <DateField field={col.key} value={draft[col.key]} onChange={setField} onKeyDown={handleKeyDown} />
               : <ViewText value={formatDate(row[col.key])} />}
           </td>
         );

@@ -29,6 +29,7 @@ app.use('/api/job-report', jobReportRoutes);
 app.use('/api/seller-report', sellerReportRoutes);
 app.use('/api/material', materialRoutes);
 app.use('/api/adjustments', adjustmentRoutes);
+app.use('/api/seller-adjustments', sellerAdjustmentRoutes);
 
 app.get('/', (req, res) => {
     res.send('HP Accounting Backend Running');

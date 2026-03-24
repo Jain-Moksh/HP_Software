@@ -12,6 +12,7 @@ import {
   Save,
 } from 'lucide-react';
 import DataTable, { EditCombobox } from '../components/DataTable';
+import DateField from '../components/DateField';
 
 // ─── Material-In column definitions ──────────────────────────────────────────
 const COLUMNS = [
@@ -343,9 +344,16 @@ export default function MaterialIn() {
                           <div className="text-center font-mono font-bold text-[#0F172A]">
                              {col.prefix}{newRow[col.key]?.toLocaleString()}
                           </div>
+                        ) : col.type === 'date' ? (
+                          <DateField
+                            field={col.key}
+                            value={newRow[col.key]}
+                            onChange={handleInputChange}
+                            onKeyDown={() => {}}
+                          />
                         ) : (
                           <input
-                            type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
+                            type={col.type === 'number' ? 'number' : 'text'}
                             value={newRow[col.key]}
                             onChange={(e) => handleInputChange(col.key, e.target.value)}
                             disabled={

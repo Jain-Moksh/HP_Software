@@ -81,7 +81,7 @@ const prepareTableData = (data, month, year, showDraftAdj = false) => {
       id: 'draft-adj',
       isDraft: true,
       tx_type: 'OUT_ADJ',
-      date: new Date().toISOString().split('T')[0],
+      date: '',
       amount: 0,
       remark: 'Adjustment',
       type1: '---', type2: '---', material: '---', rate: '---', vendor: '---',

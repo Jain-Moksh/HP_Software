@@ -60,7 +60,7 @@ const prepareTableData = (data, month, year, showDraftAdj = false) => {
       id: 'draft-adj',
       isDraft: true,
       tx_type: 'IN_ADJ',
-      date: new Date().toISOString().split('T')[0],
+      date: '',
       amount: 0,
       remark: 'Adjustment',
       type1: '---', type2: '---', material: '---', rate: '---',
@@ -248,7 +248,7 @@ export default function SellerReportDetail({ seller, onBack }) {
   );
 
   const allTransactions = report.transactions || [];
-  const transactions = allTransactions.filter(t => t.tx_type === 'IN' || t.tx_type === 'IN_ADJ');
+  const transactions = allTransactions.filter(t => !t.tx_type || t.tx_type === 'IN' || t.tx_type === 'IN_ADJ');
 
   return (
     <div className="flex flex-col h-screen bg-[#F8FAFC]">

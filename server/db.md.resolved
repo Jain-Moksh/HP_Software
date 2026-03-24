@@ -1,0 +1,167 @@
+# HP Accounting Software — Database & API Reference
+
+## Database Tables
+
+---
+
+### `jobbers`
+| Column | Type | Notes |
+|---|---|---|
+| [id](file:///c:/Users/moksh/Videos/Projects/Ongoing%20%20Projects/HP/client/src/components/Sidebar.jsx#12-76) | integer | Primary Key, auto-increment |
+| `name` | varchar | Jobber name |
+| `created_at` | timestamp | Auto set on insert |
+
+---
+
+### `sellers`
+| Column | Type | Notes |
+|---|---|---|
+| [id](file:///c:/Users/moksh/Videos/Projects/Ongoing%20%20Projects/HP/client/src/components/Sidebar.jsx#12-76) | integer | Primary Key, auto-increment |
+| `name` | varchar | Seller name |
+| `created_at` | timestamp | Auto set on insert |
+
+---
+
+### `vendors`
+| Column | Type | Notes |
+|---|---|---|
+| [id](file:///c:/Users/moksh/Videos/Projects/Ongoing%20%20Projects/HP/client/src/components/Sidebar.jsx#12-76) | integer | Primary Key, auto-increment |
+| `name` | varchar | Vendor name |
+| `created_at` | timestamp | Auto set on insert |
+
+---
+
+### `transactions_in`
+Material Inward entries (from sellers to jobbers).
+
+| Column | Type | Notes |
+|---|---|---|
+| [id](file:///c:/Users/moksh/Videos/Projects/Ongoing%20%20Projects/HP/client/src/components/Sidebar.jsx#12-76) | integer | Primary Key |
+| `jobber_id` | integer | FK → jobbers.id |
+| `seller_id` | integer | FK → sellers.id |
+| `type1` | numeric | Material quantity (type 1) |
+| `type2` | numeric | Material quantity (type 2) |
+| `material` | varchar | Material description |
+| [rate](file:///c:/Users/moksh/Videos/Projects/Ongoing%20%20Projects/HP/server/migrate.js#12-50) | numeric | Rate per unit |
+| `amount` | numeric | Total amount |
+| [date](file:///c:/Users/moksh/Videos/Projects/Ongoing%20%20Projects/HP/server/controllers/transactionController.js#46-51) | date | Transaction date |
+| `w` | boolean | W flag |
+| `b` | boolean | B flag |
+| `a` | boolean | A flag |
+| `remark` | text | Optional note |
+| `created_at` | timestamp | Auto set on insert |
+
+---
+
+### `transactions_out`
+Material Outward entries (from jobbers to vendors).
+
+| Column | Type | Notes |
+|---|---|---|
+| [id](file:///c:/Users/moksh/Videos/Projects/Ongoing%20%20Projects/HP/client/src/components/Sidebar.jsx#12-76) | integer | Primary Key |
+| `jobber_id` | integer | FK → jobbers.id |
+| `vendor_id` | integer | FK → vendors.id |
+| `type1` | numeric | Material quantity (type 1) |
+| `type2` | numeric | Material quantity (type 2) |
+| `material` | varchar | Material description |
+| [rate](file:///c:/Users/moksh/Videos/Projects/Ongoing%20%20Projects/HP/server/migrate.js#12-50) | numeric | Rate per unit |
+| `amount` | numeric | Total amount |
+| [date](file:///c:/Users/moksh/Videos/Projects/Ongoing%20%20Projects/HP/server/controllers/transactionController.js#46-51) | date | Transaction date |
+| `w` | boolean | W flag |
+| `b` | boolean | B flag |
+| `a` | boolean | A flag |
+| `remark` | text | Optional note |
+| `created_at` | timestamp | Auto set on insert |
+
+---
+
+### `jobber_adjustments`
+Payment / deduction entries against a jobber's outward balance.
+
+| Column | Type | Notes |
+|---|---|---|
+| [id](file:///c:/Users/moksh/Videos/Projects/Ongoing%20%20Projects/HP/client/src/components/Sidebar.jsx#12-76) | integer | Primary Key |
+| `jobber_id` | integer | FK → jobbers.id |
+| `amount` | numeric | Deduction amount |
+| [date](file:///c:/Users/moksh/Videos/Projects/Ongoing%20%20Projects/HP/server/controllers/transactionController.js#46-51) | date | Adjustment date |
+| `remark` | text | Optional note |
+| `created_at` | timestamp | Auto set on insert |
+
+---
+
+### `seller_adjustments`
+Payment / deduction entries against a seller's inward balance.
+
+| Column | Type | Notes |
+|---|---|---|
+| [id](file:///c:/Users/moksh/Videos/Projects/Ongoing%20%20Projects/HP/client/src/components/Sidebar.jsx#12-76) | integer | Primary Key |
+| `seller_id` | integer | FK → sellers.id |
+| `amount` | numeric | Deduction amount |
+| [date](file:///c:/Users/moksh/Videos/Projects/Ongoing%20%20Projects/HP/server/controllers/transactionController.js#46-51) | date | Adjustment date |
+| `remark` | text | Optional note |
+| `created_at` | timestamp | Auto set on insert |
+
+---
+
+## API Reference
+
+**Base URL:** `http://localhost:5000`
+
+---
+
+### Masters
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/jobbers` | Fetch all jobbers |
+| `POST` | `/api/jobbers` | Create a jobber — `{ name }` |
+| `GET` | `/api/sellers` | Fetch all sellers |
+| `POST` | `/api/sellers` | Create a seller — `{ name }` |
+| `GET` | `/api/vendors` | Fetch all vendors |
+| `POST` | `/api/vendors` | Create a vendor — `{ name }` |
+
+---
+
+### Transactions
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/transactions/in` | All material-in records |
+| `POST` | `/api/transactions/in` | Create material-in record |
+| `PUT` | `/api/transactions/in/:id` | Update material-in record |
+| `DELETE` | `/api/transactions/in/:id` | Delete (requires `x-delete-password` header) |
+| `GET` | `/api/transactions/out` | All material-out records |
+| `POST` | `/api/transactions/out` | Create material-out record |
+| `PUT` | `/api/transactions/out/:id` | Update material-out record |
+| `DELETE` | `/api/transactions/out/:id` | Delete (requires `x-delete-password` header) |
+
+---
+
+### Reports
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/job-report/:jobberName` | Full jobber report (IN + OUT + OUT_ADJ) |
+| `GET` | `/api/seller-report/:sellerName` | Full seller report (IN + IN_ADJ) |
+
+---
+
+### Jobber Adjustments
+
+| Method | Endpoint | Body | Description |
+|---|---|---|---|
+| `GET` | `/api/adjustments/jobber/:jobberId` | — | Get all adjustments for a jobber |
+| `POST` | `/api/adjustments` | `{ jobber_id, amount, date, remark }` | Create adjustment |
+| `PUT` | `/api/adjustments/:id` | `{ amount, date, remark }` | Update adjustment |
+| `DELETE` | `/api/adjustments/:id` | — | Delete (requires `x-delete-password` header) |
+
+---
+
+### Seller Adjustments
+
+| Method | Endpoint | Body | Description |
+|---|---|---|---|
+| `GET` | `/api/seller-adjustments/seller/:sellerId` | — | Get all adjustments for a seller |
+| `POST` | `/api/seller-adjustments` | `{ seller_id, amount, date, remark }` | Create adjustment |
+| `PUT` | `/api/seller-adjustments/:id` | `{ amount, date, remark }` | Update adjustment |
+| `DELETE` | `/api/seller-adjustments/:id` | — | Delete (requires `x-delete-password` header) |
