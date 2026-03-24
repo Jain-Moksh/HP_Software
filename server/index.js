@@ -9,7 +9,6 @@ const transactionRoutes = require('./routes/transactionRoutes');
 const stockRoutes = require('./routes/stockRoutes');
 const jobReportRoutes = require('./routes/jobReportRoutes');
 const sellerReportRoutes = require('./routes/sellerReportRoutes');
-const materialRoutes = require('./routes/materialRoutes');
 const adjustmentRoutes = require('./routes/adjustmentRoutes');
 const sellerAdjustmentRoutes = require('./routes/sellerAdjustmentRoutes');
 
@@ -27,7 +26,6 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/stock', stockRoutes);
 app.use('/api/job-report', jobReportRoutes);
 app.use('/api/seller-report', sellerReportRoutes);
-app.use('/api/material', materialRoutes);
 app.use('/api/adjustments', adjustmentRoutes);
 app.use('/api/seller-adjustments', sellerAdjustmentRoutes);
 

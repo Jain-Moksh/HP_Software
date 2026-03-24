@@ -1,31 +1,24 @@
--- Drop existing tables if they exist to start fresh
-DROP TABLE IF EXISTS transactions_out CASCADE;
-DROP TABLE IF EXISTS transactions_in CASCADE;
-DROP TABLE IF EXISTS jobbers CASCADE;
-DROP TABLE IF EXISTS sellers CASCADE;
-DROP TABLE IF EXISTS vendors CASCADE;
-
 -- Master Tables
-CREATE TABLE jobbers (
+CREATE TABLE IF NOT EXISTS jobbers (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) UNIQUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE sellers (
+CREATE TABLE IF NOT EXISTS sellers (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) UNIQUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE vendors (
+CREATE TABLE IF NOT EXISTS vendors (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) UNIQUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Transaction Tables
-CREATE TABLE transactions_in (
+-- Transaction Tables (v2)
+CREATE TABLE IF NOT EXISTS transactions_in (
     id SERIAL PRIMARY KEY,
     jobber_id INTEGER REFERENCES jobbers(id) ON DELETE CASCADE,
     seller_id INTEGER REFERENCES sellers(id) ON DELETE CASCADE,
@@ -42,7 +35,7 @@ CREATE TABLE transactions_in (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE transactions_out (
+CREATE TABLE IF NOT EXISTS transactions_out (
     id SERIAL PRIMARY KEY,
     jobber_id INTEGER REFERENCES jobbers(id) ON DELETE CASCADE,
     vendor_id INTEGER REFERENCES vendors(id) ON DELETE CASCADE,
@@ -58,3 +51,23 @@ CREATE TABLE transactions_out (
     a BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Adjustments
+CREATE TABLE IF NOT EXISTS jobber_adjustments (
+    id SERIAL PRIMARY KEY,
+    jobber_id INTEGER REFERENCES jobbers(id),
+    amount NUMERIC NOT NULL,
+    date DATE NOT NULL,
+    remark TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS seller_adjustments (
+    id SERIAL PRIMARY KEY,
+    seller_id INTEGER REFERENCES sellers(id),
+    amount NUMERIC NOT NULL,
+    date DATE NOT NULL,
+    remark TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
