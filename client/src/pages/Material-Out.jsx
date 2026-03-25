@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Download,
   Calculator,
@@ -49,15 +49,26 @@ const INITIAL_ROW = {
   amount: 0
 };
 
-export default function MaterialOut() {
+const TOOLBAR_ICONS = [
+  { id: 'new',        icon: Plus,        label: 'New Entry'   },
+  { id: 'export',     icon: FileDown,    label: 'Export'      },
+  { id: 'calculator', icon: Calculator,  label: 'Calculator'  },
+  { id: 'refresh',    icon: RefreshCw,   label: 'Refresh'     },
+  { id: 'filter',     icon: Filter,      label: 'Filter'      },
+  { id: 'columns',    icon: Columns3,    label: 'Columns'     },
+  { id: 'download',   icon: Download,    label: 'Download'    },
+];
+
+export default function MaterialOut({ setHeaderActions }) {
   const [data, setData] = useState([]);
   const [showEntryRow, setShowEntryRow] = useState(false);
+
+  const [masters, setMasters] = useState({ vendors: [], jobbers: [] });
   const [newRow, setNewRow] = useState(INITIAL_ROW);
   const [loading, setLoading] = useState(true);
-  const [masters, setMasters] = useState({ vendors: [], jobbers: [] });
 
   // Fetch initial data
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const resp = await fetch('http://localhost:5000/api/transactions/out');
       const json = await resp.json();
@@ -76,9 +87,9 @@ export default function MaterialOut() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchMasters = async () => {
+  const fetchMasters = useCallback(async () => {
     try {
       const [vRes, jRes] = await Promise.all([
         fetch('http://localhost:5000/api/vendors'),
@@ -89,12 +100,12 @@ export default function MaterialOut() {
     } catch (err) {
       console.error('Master fetch error:', err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
     fetchMasters();
-  }, []);
+  }, [fetchData, fetchMasters]);
 
   const ensureMasterRecord = async (type, name) => {
     if (!name) return null;
@@ -128,13 +139,34 @@ export default function MaterialOut() {
     await ensureMasterRecord(field, value);
   };
 
-  const handleToolbarClick = (id) => {
+  const handleToolbarClick = useCallback((id) => {
     if (id === 'new') setShowEntryRow(true);
     if (id === 'refresh') {
       fetchData();
       fetchMasters();
     }
-  };
+  }, [fetchData, fetchMasters]);
+
+  // Set header actions
+  useEffect(() => {
+    if (setHeaderActions) {
+      setHeaderActions(
+        <div className="flex items-center gap-1.5">
+          {TOOLBAR_ICONS.map(({ id, icon: Icon, label }) => (
+            <button
+              key={id}
+              onClick={() => handleToolbarClick(id)}
+              title={label}
+              className="w-8 h-8 flex items-center justify-center rounded border border-[#E2E8F0] text-[#334155] hover:bg-[#F1F5F9] hover:text-[#0F172A] transition-colors bg-white shadow-sm"
+            >
+              <Icon size={15} />
+            </button>
+          ))}
+        </div>
+      );
+    }
+    return () => setHeaderActions?.(null);
+  }, [setHeaderActions, masters, handleToolbarClick]); 
 
   const handleInputChange = (field, value) => {
     let updatedRow = { ...newRow, [field]: value };
@@ -253,22 +285,7 @@ export default function MaterialOut() {
 
   return (
     <div className="p-6 flex flex-col h-full bg-[#F8FAFC]">
-      {/* Page header */}
-      <div className="flex items-start justify-between mb-5 flex-shrink-0">
-        <div>
-          <h2 className="text-base font-semibold text-[#0F172A]">Material-Out Records</h2>
-          <p className="text-xs text-[#64748B] mt-0.5">Manage and track all material dispatches (Jobber & Vendor)</p>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <button onClick={() => setShowEntryRow(true)} className="w-8 h-8 flex items-center justify-center rounded border border-[#E2E8F0] text-[#334155] hover:bg-[#F1F5F9] transition-colors bg-white shadow-sm">
-            <Plus size={15} />
-          </button>
-          <button onClick={() => { fetchData(); fetchMasters(); }} className="w-8 h-8 flex items-center justify-center rounded border border-[#E2E8F0] text-[#334155] hover:bg-[#F1F5F9] transition-colors bg-white shadow-sm">
-            <RefreshCw size={15} />
-          </button>
-        </div>
-      </div>
+      {/* Redundant Page header removed - now in global Header */}
 
       {showEntryRow && (
         <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-300">

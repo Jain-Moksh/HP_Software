@@ -436,10 +436,10 @@ export default function JobReportDetail({ jobber, onBack }) {
             <div className="flex items-center gap-2">
               <button 
                 onClick={() => setShowAdjEntry(true)}
-                className="p-1 hover:bg-white rounded border border-[#E2E8F0] text-rose-600 transition-all"
+                className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 rounded text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
                 title="Add Deduction/Payment"
               >
-                <Plus size={14} />
+                <Plus size={12} /> PAY
               </button>
               <span className="text-[10px] font-bold text-[#64748B] bg-white px-2 py-0.5 rounded border border-[#E2E8F0]">
                 {outTransactions.filter(r => {

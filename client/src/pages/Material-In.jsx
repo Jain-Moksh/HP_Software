@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Download,
   Calculator,
@@ -66,15 +66,16 @@ const INITIAL_ROW = {
   amount: 0
 };
 
-export default function MaterialIn() {
+export default function MaterialIn({ setHeaderActions }) {
   const [data, setData] = useState([]);
   const [showEntryRow, setShowEntryRow] = useState(false);
+
+  const [masters, setMasters] = useState({ sellers: [], jobbers: [] });
   const [newRow, setNewRow] = useState(INITIAL_ROW);
   const [loading, setLoading] = useState(true);
-  const [masters, setMasters] = useState({ sellers: [], jobbers: [] });
 
   // Fetch initial data
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const resp = await fetch('http://localhost:5000/api/transactions/in');
       const json = await resp.json();
@@ -93,9 +94,9 @@ export default function MaterialIn() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchMasters = async () => {
+  const fetchMasters = useCallback(async () => {
     try {
       const [sRes, jRes] = await Promise.all([
         fetch('http://localhost:5000/api/sellers'),
@@ -106,12 +107,12 @@ export default function MaterialIn() {
     } catch (err) {
       console.error('Master fetch error:', err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
     fetchMasters();
-  }, []);
+  }, [fetchData, fetchMasters]);
 
   const ensureMasterRecord = async (type, name) => {
     if (!name) return null;
@@ -147,13 +148,34 @@ export default function MaterialIn() {
     await ensureMasterRecord(field, value);
   };
 
-  const handleToolbarClick = (id) => {
+  const handleToolbarClick = useCallback((id) => {
     if (id === 'new') setShowEntryRow(true);
     if (id === 'refresh') {
       fetchData();
       fetchMasters();
     }
-  };
+  }, [fetchData, fetchMasters]);
+
+  // Set header actions
+  useEffect(() => {
+    if (setHeaderActions) {
+      setHeaderActions(
+        <div className="flex items-center gap-1.5">
+          {TOOLBAR_ICONS.map(({ id, icon: Icon, label }) => (
+            <button
+              key={id}
+              onClick={() => handleToolbarClick(id)}
+              title={label}
+              className="w-8 h-8 flex items-center justify-center rounded border border-[#E2E8F0] text-[#334155] hover:bg-[#F1F5F9] hover:text-[#0F172A] transition-colors bg-white shadow-sm"
+            >
+              <Icon size={15} />
+            </button>
+          ))}
+        </div>
+      );
+    }
+    return () => setHeaderActions?.(null);
+  }, [setHeaderActions, masters, handleToolbarClick]); 
 
   const handleInputChange = (field, value) => {
     let updatedRow = { ...newRow, [field]: value };
@@ -276,27 +298,7 @@ export default function MaterialIn() {
 
   return (
     <div className="p-6 flex flex-col h-full bg-[#F8FAFC]">
-      {/* Page header */}
-      <div className="flex items-start justify-between mb-5 flex-shrink-0">
-        <div>
-          <h2 className="text-base font-semibold text-[#0F172A]">Material Records</h2>
-          <p className="text-xs text-[#64748B] mt-0.5">Manage and track all material entries</p>
-        </div>
-
-        {/* Toolbar icons */}
-        <div className="flex items-center gap-1.5">
-          {TOOLBAR_ICONS.map(({ id, icon: Icon, label }) => (
-            <button
-              key={id}
-              onClick={() => handleToolbarClick(id)}
-              title={label}
-              className="w-8 h-8 flex items-center justify-center rounded border border-[#E2E8F0] text-[#334155] hover:bg-[#F1F5F9] hover:text-[#0F172A] transition-colors bg-white shadow-sm"
-            >
-              <Icon size={15} />
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Redundant Page header removed - now in global Header */}
 
       {/* New Entry Table Section */}
       {showEntryRow && (

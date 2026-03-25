@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
 import { ClipboardList, ChevronRight } from 'lucide-react';
 
-export default function SellerReport({ onViewReport }) {
+export default function SellerReport({ onViewReport, setHeaderActions }) {
   const [sellers, setSellers] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Clear header actions for this page (no toolbar needed)
+  useEffect(() => {
+    setHeaderActions?.(null);
+  }, [setHeaderActions]);
 
   useEffect(() => {
     const fetchSellers = async () => {
@@ -19,19 +24,9 @@ export default function SellerReport({ onViewReport }) {
     };
     fetchSellers();
   }, []);
-
   return (
     <div className="p-6 flex flex-col h-full bg-[#F8FAFC]">
-      {/* Page header */}
-      <div className="flex items-start justify-between mb-8 flex-shrink-0">
-        <div>
-          <h2 className="text-xl font-bold text-[#0F172A]">Seller Reports</h2>
-          <p className="text-sm text-[#64748B] mt-1">Select a seller to view their detailed supply transaction report</p>
-        </div>
-        <div className="p-2.5 bg-white border border-[#E2E8F0] rounded-lg shadow-sm text-[#2563EB]">
-          <ClipboardList size={20} />
-        </div>
-      </div>
+      {/* Redundant Page header removed - now in global Header */}
 
       {loading ? (
         <div className="flex items-center justify-center p-12 text-sm text-[#64748B]">Loading sellers...</div>
