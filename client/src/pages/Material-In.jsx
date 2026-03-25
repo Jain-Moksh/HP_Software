@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Download,
   Calculator,
@@ -10,6 +10,7 @@ import {
   RotateCcw,
   X,
   Save,
+  Search
 } from 'lucide-react';
 import DataTable, { EditCombobox } from '../components/DataTable';
 import DateField from '../components/DateField';
@@ -71,8 +72,18 @@ export default function MaterialIn({ setHeaderActions }) {
   const [showEntryRow, setShowEntryRow] = useState(false);
 
   const [masters, setMasters] = useState({ sellers: [], jobbers: [] });
+  const [searchFilters, setSearchFilters] = useState({ seller: '', jobber: '', material: '' });
   const [newRow, setNewRow] = useState(INITIAL_ROW);
   const [loading, setLoading] = useState(true);
+
+  const filteredData = useMemo(() => {
+    return data.filter(item => {
+      const matchSeller   = (item.seller || '').toLowerCase().includes(searchFilters.seller.toLowerCase());
+      const matchJobber   = (item.jobber || '').toLowerCase().includes(searchFilters.jobber.toLowerCase());
+      const matchMaterial = (item.material || '').toLowerCase().includes(searchFilters.material.toLowerCase());
+      return matchSeller && matchJobber && matchMaterial;
+    });
+  }, [data, searchFilters]);
 
   // Fetch initial data
   const fetchData = useCallback(async () => {
@@ -398,6 +409,56 @@ export default function MaterialIn({ setHeaderActions }) {
         </div>
       )}
 
+      {/* Search & Filter Bar */}
+      <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-sm px-4 py-2.5 flex flex-wrap items-center gap-4 mb-6">
+        <div className="flex items-center gap-2 text-[#64748B]">
+          <Search size={14} className="text-[#2563EB]" />
+          <span className="text-[10px] font-bold uppercase tracking-widest">Quick Filters</span>
+        </div>
+        
+        <div className="flex-1 min-w-[180px] relative group">
+          <input
+            type="text"
+            placeholder="Search Material..."
+            value={searchFilters.material}
+            onChange={(e) => setSearchFilters({ ...searchFilters, material: e.target.value })}
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded px-2 py-1.5 focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] outline-none transition-all"
+          />
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] group-focus-within:text-[#2563EB] transition-colors" />
+        </div>
+
+        <div className="flex-1 min-w-[180px] relative group">
+          <input
+            type="text"
+            placeholder="Search Seller..."
+            value={searchFilters.seller}
+            onChange={(e) => setSearchFilters({ ...searchFilters, seller: e.target.value })}
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded px-2 py-1.5 focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] outline-none transition-all"
+          />
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] group-focus-within:text-[#2563EB] transition-colors" />
+        </div>
+
+        <div className="flex-1 min-w-[180px] relative group">
+          <input
+            type="text"
+            placeholder="Search Jobber..."
+            value={searchFilters.jobber}
+            onChange={(e) => setSearchFilters({ ...searchFilters, jobber: e.target.value })}
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded px-2 py-1.5 focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] outline-none transition-all"
+          />
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] group-focus-within:text-[#2563EB] transition-colors" />
+        </div>
+        
+        {(searchFilters.seller || searchFilters.jobber || searchFilters.material) && (
+          <button 
+            onClick={() => setSearchFilters({ seller: '', jobber: '', material: '' })}
+            className="text-[10px] font-bold text-[#E11D48] hover:text-[#9F1239] transition-colors uppercase tracking-tight"
+          >
+            Clear All
+          </button>
+        )}
+      </div>
+
       {/* Table (takes remaining height) */}
       <div className="flex-1 overflow-hidden">
         {loading ? (
@@ -405,7 +466,7 @@ export default function MaterialIn({ setHeaderActions }) {
         ) : (
           <DataTable
             columns={COLUMNS}
-            initialData={data}
+            initialData={filteredData}
             comboboxFields={{ 
               seller: masters.sellers.map(s => s.name), 
               jobber: masters.jobbers.map(j => j.name) 
