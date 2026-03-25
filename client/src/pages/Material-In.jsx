@@ -422,7 +422,7 @@ export default function MaterialIn({ setHeaderActions }) {
             placeholder="Search Material..."
             value={searchFilters.material}
             onChange={(e) => setSearchFilters({ ...searchFilters, material: e.target.value })}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded px-2 py-1.5 focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] outline-none transition-all"
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded px-2 py-1.5 focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] outline-none transition-all placeholder:text-[#64748B]"
           />
           <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] group-focus-within:text-[#2563EB] transition-colors" />
         </div>
@@ -433,7 +433,7 @@ export default function MaterialIn({ setHeaderActions }) {
             placeholder="Search Seller..."
             value={searchFilters.seller}
             onChange={(e) => setSearchFilters({ ...searchFilters, seller: e.target.value })}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded px-2 py-1.5 focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] outline-none transition-all"
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded px-2 py-1.5 focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] outline-none transition-all placeholder:text-[#64748B]"
           />
           <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] group-focus-within:text-[#2563EB] transition-colors" />
         </div>
@@ -444,7 +444,7 @@ export default function MaterialIn({ setHeaderActions }) {
             placeholder="Search Jobber..."
             value={searchFilters.jobber}
             onChange={(e) => setSearchFilters({ ...searchFilters, jobber: e.target.value })}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded px-2 py-1.5 focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] outline-none transition-all"
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded px-2 py-1.5 focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] outline-none transition-all placeholder:text-[#64748B]"
           />
           <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] group-focus-within:text-[#2563EB] transition-colors" />
         </div>

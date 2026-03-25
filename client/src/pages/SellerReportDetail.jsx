@@ -248,7 +248,9 @@ export default function SellerReportDetail({ seller, onBack }) {
   );
 
   const allTransactions = report.transactions || [];
-  const transactions = allTransactions.filter(t => !t.tx_type || t.tx_type === 'IN' || t.tx_type === 'IN_ADJ');
+  const transactions = allTransactions
+    .filter(t => !t.tx_type || t.tx_type === 'IN' || t.tx_type === 'IN_ADJ')
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
 
   return (
     <div className="flex flex-col h-screen bg-[#F8FAFC]">

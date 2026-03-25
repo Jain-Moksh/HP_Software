@@ -331,7 +331,9 @@ export default function JobReportDetail({ jobber, onBack }) {
   };
 
   const inTransactions = allTransactions.filter(t => t.tx_type === 'IN');
-  const outTransactions = allTransactions.filter(t => t.tx_type === 'OUT' || t.tx_type === 'OUT_ADJ');
+  const outTransactions = allTransactions
+    .filter(t => t.tx_type === 'OUT' || t.tx_type === 'OUT_ADJ')
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
 
   // Month filtering years
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
