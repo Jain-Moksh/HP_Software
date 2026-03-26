@@ -35,3 +35,27 @@ exports.createSeller = async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 };
+// DELETE /api/sellers/:id
+exports.deleteSeller = async (req, res) => {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (password !== process.env.del_pass) {
+        return res.status(401).json({ error: 'Invalid password' });
+    }
+
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM seller_adjustments WHERE seller_id = $1', [id]);
+        await client.query('DELETE FROM sellers WHERE id = $1', [id]);
+        await client.query('COMMIT');
+        res.json({ message: 'Seller and all associated data deleted successfully' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error deleting seller:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    } finally {
+        client.release();
+    }
+};
