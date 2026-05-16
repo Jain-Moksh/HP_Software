@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { ClipboardList, ChevronRight, Trash2 } from 'lucide-react';
 import DeleteMasterModal from '../components/DeleteMasterModal';
+import API_BASE_URL from '../config';
 
-export default function JobReport({ onViewReport, setHeaderActions }) {
+export default function JobReport() {
+  const navigate = useNavigate();
+  const { setHeaderActions } = useOutletContext();
   const [jobbers, setJobbers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,7 +19,7 @@ export default function JobReport({ onViewReport, setHeaderActions }) {
 
   const fetchJobbers = async () => {
     try {
-      const resp = await fetch('http://localhost:5000/api/jobbers');
+      const resp = await fetch(`${API_BASE_URL}/jobbers`);
       const json = await resp.json();
       setJobbers(json);
     } catch (err) {
@@ -31,7 +35,7 @@ export default function JobReport({ onViewReport, setHeaderActions }) {
 
   const handleDeleteJobber = async (password) => {
     try {
-      const resp = await fetch(`http://localhost:5000/api/jobbers/${deleteModal.jobberId}`, {
+      const resp = await fetch(`${API_BASE_URL}/jobbers/${deleteModal.jobberId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password })
@@ -49,6 +53,11 @@ export default function JobReport({ onViewReport, setHeaderActions }) {
       alert('An error occurred while deleting');
     }
   };
+
+  const handleViewReport = (jobber) => {
+    navigate(`/job-report/${jobber.id}`);
+  };
+
   return (
     <div className="p-6 flex flex-col h-full bg-[#F8FAFC]">
       {/* Redundant Page header removed - now in global Header */}
@@ -64,7 +73,7 @@ export default function JobReport({ onViewReport, setHeaderActions }) {
           {jobbers.map((jobber) => (
             <div key={jobber.id} className="relative group">
               <button
-                onClick={() => onViewReport(jobber)}
+                onClick={() => handleViewReport(jobber)}
                 className="w-full bg-white p-6 rounded-xl border border-[#E2E8F0] shadow-sm hover:shadow-md hover:border-[#2563EB] transition-all duration-200 text-left relative overflow-hidden"
               >
                 {/* Hover accent */}

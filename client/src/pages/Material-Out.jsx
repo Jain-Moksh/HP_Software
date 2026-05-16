@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import {
   Download,
   Calculator,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 import DataTable, { EditCombobox } from '../components/DataTable';
 import DateField from '../components/DateField';
+import API_BASE_URL from '../config';
 
 // ─── Material-Out column definitions ─────────────────────────────────────────
 const COLUMNS = [
@@ -59,7 +61,8 @@ const TOOLBAR_ICONS = [
   { id: 'download',   icon: Download,    label: 'Download'    },
 ];
 
-export default function MaterialOut({ setHeaderActions }) {
+export default function MaterialOut() {
+  const { setHeaderActions } = useOutletContext();
   const [data, setData] = useState([]);
   const [showEntryRow, setShowEntryRow] = useState(false);
 
@@ -70,7 +73,7 @@ export default function MaterialOut({ setHeaderActions }) {
   // Fetch initial data
   const fetchData = useCallback(async () => {
     try {
-      const resp = await fetch('http://localhost:5000/api/transactions/out');
+      const resp = await fetch(`${API_BASE_URL}/transactions/out`);
       const json = await resp.json();
       
       const mapped = json.map(item => {
@@ -92,8 +95,8 @@ export default function MaterialOut({ setHeaderActions }) {
   const fetchMasters = useCallback(async () => {
     try {
       const [vRes, jRes] = await Promise.all([
-        fetch('http://localhost:5000/api/vendors'),
-        fetch('http://localhost:5000/api/jobbers')
+        fetch(`${API_BASE_URL}/vendors`),
+        fetch(`${API_BASE_URL}/jobbers`)
       ]);
       const [vendors, jobbers] = await Promise.all([vRes.json(), jRes.json()]);
       setMasters({ vendors, jobbers });
@@ -115,7 +118,7 @@ export default function MaterialOut({ setHeaderActions }) {
 
     const apiPath = type === 'vendor' ? 'vendors' : 'jobbers';
     try {
-      const resp = await fetch(`http://localhost:5000/api/${apiPath}`, {
+      const resp = await fetch(`${API_BASE_URL}/${apiPath}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
@@ -126,7 +129,7 @@ export default function MaterialOut({ setHeaderActions }) {
         return newRecord.id;
       } else if (resp.status === 400) {
          await fetchMasters();
-         const refetch = await fetch(`http://localhost:5000/api/${apiPath}`);
+         const refetch = await fetch(`${API_BASE_URL}/${apiPath}`);
          const freshList = await refetch.json();
          const found = freshList.find(item => item.name.toLowerCase() === name.toLowerCase());
          if (found) return found.id;
@@ -208,7 +211,7 @@ export default function MaterialOut({ setHeaderActions }) {
         amount: Number(newRow.amount) || 0
       };
 
-      const resp = await fetch('http://localhost:5000/api/transactions/out', {
+      const resp = await fetch(`${API_BASE_URL}/transactions/out`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entryToSave),
@@ -241,7 +244,7 @@ export default function MaterialOut({ setHeaderActions }) {
         jobber_id: jobberId
       };
 
-      const resp = await fetch(`http://localhost:5000/api/transactions/out/${updatedRow.id}`, {
+      const resp = await fetch(`${API_BASE_URL}/transactions/out/${updatedRow.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -260,7 +263,7 @@ export default function MaterialOut({ setHeaderActions }) {
 
   const handleDelete = async (id, password) => {
     try {
-      const resp = await fetch(`http://localhost:5000/api/transactions/out/${id}`, {
+      const resp = await fetch(`${API_BASE_URL}/transactions/out/${id}`, {
         method: 'DELETE',
         headers: { 'x-delete-password': password }
       });

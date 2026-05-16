@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { ArrowLeft, TrendingUp, TrendingDown, Box, Plus } from 'lucide-react';
 import DataTable, { EditCombobox } from '../components/DataTable';
-
+import API_BASE_URL from '../config';
 
 const IN_COLUMNS = [
   { key: 'type1',    label: 'Type 1',    type: 'number' },
@@ -112,10 +113,14 @@ const prepareTableData = (data, month, year, showDraftAdj = false) => {
   return result;
 };
 
-export default function JobReportDetail({ jobber, onBack }) {
+export default function JobReportDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { setHeaderActions } = useOutletContext();
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
 
+  const [jobber, setJobber] = useState(null);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [masters, setMasters] = useState({ sellers: [], vendors: [], jobbers: [] });
@@ -128,14 +133,23 @@ export default function JobReportDetail({ jobber, onBack }) {
   const fetchMasters = async () => {
     try {
       const [sRes, vRes, jRes] = await Promise.all([
-        fetch('http://localhost:5000/api/sellers'),
-        fetch('http://localhost:5000/api/vendors'),
-        fetch('http://localhost:5000/api/jobbers')
+        fetch(`${API_BASE_URL}/sellers`),
+        fetch(`${API_BASE_URL}/vendors`),
+        fetch(`${API_BASE_URL}/jobbers`)
       ]);
       const [sellers, vendors, jobbers] = await Promise.all([sRes.json(), vRes.json(), jRes.json()]);
       setMasters({ sellers, vendors, jobbers });
+      
+      // Find the specific jobber for this ID
+      const currentJobber = jobbers.find(j => j.id.toString() === id);
+      if (currentJobber) {
+        setJobber(currentJobber);
+      } else {
+        setLoading(false); // Jobber not found
+      }
     } catch (err) {
       console.error('Master fetch error:', err);
+      setLoading(false);
     }
   };
 
@@ -147,7 +161,7 @@ export default function JobReportDetail({ jobber, onBack }) {
 
     const apiPath = type === 'seller' ? 'sellers' : type === 'vendor' ? 'vendors' : 'jobbers';
     try {
-      const resp = await fetch(`http://localhost:5000/api/${apiPath}`, {
+      const resp = await fetch(`${API_BASE_URL}/${apiPath}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
@@ -170,8 +184,8 @@ export default function JobReportDetail({ jobber, onBack }) {
       if (updatedRow.tx_type === 'OUT_ADJ' || updatedRow.isDraft) {
         const isNew = updatedRow.isDraft;
         const url = isNew 
-          ? `http://localhost:5000/api/adjustments`
-          : `http://localhost:5000/api/adjustments/${updatedRow.id}`;
+          ? `${API_BASE_URL}/adjustments`
+          : `${API_BASE_URL}/adjustments/${updatedRow.id}`;
         
         const payload = {
           jobber_id: jobber.id || report?.jobberId || (await ensureMasterRecord('jobber', jobber.name)),
@@ -210,7 +224,7 @@ export default function JobReportDetail({ jobber, onBack }) {
         jobber_id: jId
       };
 
-      const resp = await fetch(`http://localhost:5000/api/transactions/${apiPath}/${updatedRow.id}`, {
+      const resp = await fetch(`${API_BASE_URL}/transactions/${apiPath}/${updatedRow.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -226,9 +240,9 @@ export default function JobReportDetail({ jobber, onBack }) {
 
   const handleDelete = async (id, password, tx_type) => {
     try {
-      let url = `http://localhost:5000/api/transactions/${tx_type === 'IN' ? 'in' : 'out'}/${id}`;
+      let url = `${API_BASE_URL}/transactions/${tx_type === 'IN' ? 'in' : 'out'}/${id}`;
       if (tx_type === 'OUT_ADJ') {
-        url = `http://localhost:5000/api/adjustments/${id}`;
+        url = `${API_BASE_URL}/adjustments/${id}`;
       }
 
       const resp = await fetch(url, {
@@ -248,8 +262,9 @@ export default function JobReportDetail({ jobber, onBack }) {
   };
 
   const fetchReport = async () => {
+    if (!jobber?.name) return;
     try {
-      const resp = await fetch(`http://localhost:5000/api/job-report/${encodeURIComponent(jobber.name)}`);
+      const resp = await fetch(`${API_BASE_URL}/job-report/${encodeURIComponent(jobber.name)}`);
       if (resp.ok) {
         const json = await resp.json();
         setReport(json);
@@ -265,9 +280,13 @@ export default function JobReportDetail({ jobber, onBack }) {
   };
 
   useEffect(() => {
+    fetchMasters();
+    setHeaderActions?.(null);
+  }, [id]);
+
+  useEffect(() => {
     if (jobber?.name) {
         fetchReport();
-        fetchMasters();
     }
   }, [jobber]);
 
@@ -279,11 +298,11 @@ export default function JobReportDetail({ jobber, onBack }) {
     );
   }
 
-  if (!report) {
+  if (!report || !jobber) {
     return (
       <div className="p-6 flex flex-col items-center justify-center h-full gap-4">
         <p className="text-sm text-[#64748B]">No report data found for this jobber.</p>
-        <button onClick={onBack} className="text-[#2563EB] text-sm font-semibold underline">Go Back</button>
+        <button onClick={() => navigate(-1)} className="text-[#2563EB] text-sm font-semibold underline">Go Back</button>
       </div>
     );
   }
@@ -349,7 +368,7 @@ export default function JobReportDetail({ jobber, onBack }) {
       <div className="flex-none bg-white border-b border-[#E2E8F0] px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-4">
           <button 
-            onClick={onBack}
+            onClick={() => navigate(-1)}
             className="p-2 hover:bg-[#F1F5F9] rounded-lg text-[#64748B] hover:text-[#0F172A] transition-all"
           >
             <ArrowLeft size={20} />
@@ -370,12 +389,12 @@ export default function JobReportDetail({ jobber, onBack }) {
              </span>
              <div className="flex gap-4">
                 <div className="text-right flex flex-col items-end">
-                  <span className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-tighter -mb-1">T1</span>
-                  <span className="text-xl font-extrabold text-[#0F172A] leading-tight">{openingStock.type1}</span>
+                   <span className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-tighter -mb-1">T1</span>
+                   <span className="text-xl font-extrabold text-[#0F172A] leading-tight">{openingStock.type1}</span>
                 </div>
                 <div className="text-right flex flex-col items-end">
-                  <span className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-tighter -mb-1">T2</span>
-                  <span className="text-xl font-extrabold text-[#0F172A] leading-tight">{openingStock.type2}</span>
+                   <span className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-tighter -mb-1">T2</span>
+                   <span className="text-xl font-extrabold text-[#0F172A] leading-tight">{openingStock.type2}</span>
                 </div>
              </div>
           </div>
@@ -386,12 +405,12 @@ export default function JobReportDetail({ jobber, onBack }) {
              </span>
              <div className="flex gap-4">
                 <div className="text-right flex flex-col items-end">
-                  <span className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-tighter -mb-1">T1</span>
-                  <span className="text-xl font-extrabold text-[#0F172A] leading-tight">{closingStock.type1}</span>
+                   <span className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-tighter -mb-1">T1</span>
+                   <span className="text-xl font-extrabold text-[#0F172A] leading-tight">{closingStock.type1}</span>
                 </div>
                 <div className="text-right flex flex-col items-end">
-                  <span className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-tighter -mb-1">T2</span>
-                  <span className="text-xl font-extrabold text-[#0F172A] leading-tight">{closingStock.type2}</span>
+                   <span className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-tighter -mb-1">T2</span>
+                   <span className="text-xl font-extrabold text-[#0F172A] leading-tight">{closingStock.type2}</span>
                 </div>
              </div>
           </div>

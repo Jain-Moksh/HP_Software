@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import {
   Download,
   Calculator,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import DataTable, { EditCombobox } from '../components/DataTable';
 import DateField from '../components/DateField';
+import API_BASE_URL from '../config';
 
 // ─── Material-In column definitions ──────────────────────────────────────────
 const COLUMNS = [
@@ -67,7 +69,8 @@ const INITIAL_ROW = {
   amount: 0
 };
 
-export default function MaterialIn({ setHeaderActions }) {
+export default function MaterialIn() {
+  const { setHeaderActions } = useOutletContext();
   const [data, setData] = useState([]);
   const [showEntryRow, setShowEntryRow] = useState(false);
 
@@ -88,7 +91,7 @@ export default function MaterialIn({ setHeaderActions }) {
   // Fetch initial data
   const fetchData = useCallback(async () => {
     try {
-      const resp = await fetch('http://localhost:5000/api/transactions/in');
+      const resp = await fetch(`${API_BASE_URL}/transactions/in`);
       const json = await resp.json();
       
       const mapped = json.map(item => {
@@ -110,8 +113,8 @@ export default function MaterialIn({ setHeaderActions }) {
   const fetchMasters = useCallback(async () => {
     try {
       const [sRes, jRes] = await Promise.all([
-        fetch('http://localhost:5000/api/sellers'),
-        fetch('http://localhost:5000/api/jobbers')
+        fetch(`${API_BASE_URL}/sellers`),
+        fetch(`${API_BASE_URL}/jobbers`)
       ]);
       const [sellers, jobbers] = await Promise.all([sRes.json(), jRes.json()]);
       setMasters({ sellers, jobbers });
@@ -133,7 +136,7 @@ export default function MaterialIn({ setHeaderActions }) {
 
     const apiPath = type === 'seller' ? 'sellers' : 'jobbers';
     try {
-      const resp = await fetch(`http://localhost:5000/api/${apiPath}`, {
+      const resp = await fetch(`${API_BASE_URL}/${apiPath}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
@@ -145,7 +148,7 @@ export default function MaterialIn({ setHeaderActions }) {
       } else if (resp.status === 400) {
          // Fallback: fetch masters again and try to find it (someone might have added it simultaneously)
          await fetchMasters();
-         const refetch = await fetch(`http://localhost:5000/api/${apiPath}`);
+         const refetch = await fetch(`${API_BASE_URL}/${apiPath}`);
          const freshList = await refetch.json();
          const found = freshList.find(item => item.name.toLowerCase() === name.toLowerCase());
          if (found) return found.id;
@@ -231,7 +234,7 @@ export default function MaterialIn({ setHeaderActions }) {
         amount: Number(newRow.amount) || 0
       };
 
-      const resp = await fetch('http://localhost:5000/api/transactions/in', {
+      const resp = await fetch(`${API_BASE_URL}/transactions/in`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entryToSave),
@@ -265,7 +268,7 @@ export default function MaterialIn({ setHeaderActions }) {
         jobber_id: jobberId
       };
 
-      const resp = await fetch(`http://localhost:5000/api/transactions/in/${updatedRow.id}`, {
+      const resp = await fetch(`${API_BASE_URL}/transactions/in/${updatedRow.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -284,7 +287,7 @@ export default function MaterialIn({ setHeaderActions }) {
 
   const handleDelete = async (id, password) => {
     try {
-      const resp = await fetch(`http://localhost:5000/api/transactions/in/${id}`, {
+      const resp = await fetch(`${API_BASE_URL}/transactions/in/${id}`, {
         method: 'DELETE',
         headers: { 'x-delete-password': password }
       });

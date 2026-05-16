@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { ArrowLeft, Box, Truck, Plus } from 'lucide-react';
 import DataTable from '../components/DataTable';
+import API_BASE_URL from '../config';
 
 const COLUMNS = [
   { key: 'type1',    label: 'Type 1',    type: 'number' },
@@ -90,10 +92,14 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-export default function SellerReportDetail({ seller, onBack }) {
+export default function SellerReportDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { setHeaderActions } = useOutletContext();
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
 
+  const [seller, setSeller] = useState(null);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [masters, setMasters] = useState({ jobbers: [] });
@@ -107,17 +113,29 @@ export default function SellerReportDetail({ seller, onBack }) {
 
   const fetchMasters = async () => {
     try {
-      const resp = await fetch('http://localhost:5000/api/jobbers');
-      const json = await resp.json();
-      setMasters({ jobbers: json });
+      const [jRes, sRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/jobbers`),
+        fetch(`${API_BASE_URL}/sellers`)
+      ]);
+      const [jobbers, sellers] = await Promise.all([jRes.json(), sRes.json()]);
+      setMasters({ jobbers });
+      
+      const currentSeller = sellers.find(s => s.id.toString() === id);
+      if (currentSeller) {
+        setSeller(currentSeller);
+      } else {
+        setLoading(false);
+      }
     } catch (err) {
       console.error('Master fetch error:', err);
+      setLoading(false);
     }
   };
 
   const fetchReport = async () => {
+    if (!seller?.name) return;
     try {
-      const resp = await fetch(`http://localhost:5000/api/seller-report/${encodeURIComponent(seller.name)}`);
+      const resp = await fetch(`${API_BASE_URL}/seller-report/${encodeURIComponent(seller.name)}`);
       if (resp.ok) {
         const json = await resp.json();
         setReport(json);
@@ -140,7 +158,7 @@ export default function SellerReportDetail({ seller, onBack }) {
 
     const apiPath = type === 'jobber' ? 'jobbers' : 'sellers';
     try {
-      const resp = await fetch(`http://localhost:5000/api/${apiPath}`, {
+      const resp = await fetch(`${API_BASE_URL}/${apiPath}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
@@ -163,8 +181,8 @@ export default function SellerReportDetail({ seller, onBack }) {
       if (updatedRow.tx_type === 'IN_ADJ' || updatedRow.isDraft) {
         const isNew = updatedRow.isDraft;
         const url = isNew 
-          ? `http://localhost:5000/api/seller-adjustments`
-          : `http://localhost:5000/api/seller-adjustments/${updatedRow.id}`;
+          ? `${API_BASE_URL}/seller-adjustments`
+          : `${API_BASE_URL}/seller-adjustments/${updatedRow.id}`;
         
         const payload = {
           seller_id: seller.id || report?.sellerId || (await ensureMasterRecord('seller', seller.name)),
@@ -197,7 +215,7 @@ export default function SellerReportDetail({ seller, onBack }) {
         seller_id: sId
       };
 
-      const resp = await fetch(`http://localhost:5000/api/transactions/in/${updatedRow.id}`, {
+      const resp = await fetch(`${API_BASE_URL}/transactions/in/${updatedRow.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -210,9 +228,9 @@ export default function SellerReportDetail({ seller, onBack }) {
 
   const handleDelete = async (id, password, tx_type) => {
     try {
-      let url = `http://localhost:5000/api/transactions/in/${id}`;
+      let url = `${API_BASE_URL}/transactions/in/${id}`;
       if (tx_type === 'IN_ADJ') {
-         url = `http://localhost:5000/api/seller-adjustments/${id}`;
+         url = `${API_BASE_URL}/seller-adjustments/${id}`;
       }
 
       const resp = await fetch(url, {
@@ -228,9 +246,13 @@ export default function SellerReportDetail({ seller, onBack }) {
   };
 
   useEffect(() => {
+    fetchMasters();
+    setHeaderActions?.(null);
+  }, [id]);
+
+  useEffect(() => {
     if (seller?.name) {
       fetchReport();
-      fetchMasters();
     }
   }, [seller]);
 
@@ -240,10 +262,10 @@ export default function SellerReportDetail({ seller, onBack }) {
     </div>
   );
   
-  if (!report) return (
+  if (!report || !seller) return (
     <div className="p-6 flex flex-col items-center justify-center h-screen gap-4">
       <p className="text-sm text-[#64748B]">No report data found.</p>
-      <button onClick={onBack} className="text-[#2563EB] text-sm font-semibold underline">Go Back</button>
+      <button onClick={() => navigate(-1)} className="text-[#2563EB] text-sm font-semibold underline">Go Back</button>
     </div>
   );
 
@@ -257,7 +279,7 @@ export default function SellerReportDetail({ seller, onBack }) {
       {/* ── Compact Sticky Header ── */}
       <div className="flex-none bg-white border-b border-[#E2E8F0] px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2 hover:bg-[#F1F5F9] rounded-lg text-[#64748B] hover:text-[#0F172A] transition-all">
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-[#F1F5F9] rounded-lg text-[#64748B] hover:text-[#0F172A] transition-all">
             <ArrowLeft size={20} />
           </button>
           <div>

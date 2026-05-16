@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { ClipboardList, ChevronRight, Trash2 } from 'lucide-react';
 import DeleteMasterModal from '../components/DeleteMasterModal';
+import API_BASE_URL from '../config';
 
-export default function SellerReport({ onViewReport, setHeaderActions }) {
+export default function SellerReport() {
+  const navigate = useNavigate();
+  const { setHeaderActions } = useOutletContext();
   const [sellers, setSellers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,7 +19,7 @@ export default function SellerReport({ onViewReport, setHeaderActions }) {
 
   const fetchSellers = async () => {
     try {
-      const resp = await fetch('http://localhost:5000/api/sellers');
+      const resp = await fetch(`${API_BASE_URL}/sellers`);
       const json = await resp.json();
       setSellers(json);
     } catch (err) {
@@ -31,7 +35,7 @@ export default function SellerReport({ onViewReport, setHeaderActions }) {
 
   const handleDeleteSeller = async (password) => {
     try {
-      const resp = await fetch(`http://localhost:5000/api/sellers/${deleteModal.sellerId}`, {
+      const resp = await fetch(`${API_BASE_URL}/sellers/${deleteModal.sellerId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password })
@@ -49,6 +53,11 @@ export default function SellerReport({ onViewReport, setHeaderActions }) {
       alert('An error occurred while deleting');
     }
   };
+
+  const handleViewReport = (seller) => {
+    navigate(`/seller-report/${seller.id}`);
+  };
+
   return (
     <div className="p-6 flex flex-col h-full bg-[#F8FAFC]">
       {/* Redundant Page header removed - now in global Header */}
@@ -64,7 +73,7 @@ export default function SellerReport({ onViewReport, setHeaderActions }) {
           {sellers.map((seller) => (
             <div key={seller.id} className="relative group">
               <button
-                onClick={() => onViewReport(seller)}
+                onClick={() => handleViewReport(seller)}
                 className="w-full bg-white p-6 rounded-xl border border-[#E2E8F0] shadow-sm hover:shadow-md hover:border-[#2563EB] transition-all duration-200 text-left relative overflow-hidden"
               >
                 {/* Hover accent */}

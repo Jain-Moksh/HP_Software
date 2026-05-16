@@ -1,15 +1,16 @@
 import { useState } from 'react';
+import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Package, PackageOpen, ClipboardList, Menu, X, ChevronRight } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'materials', label: 'Material-In', icon: Package },
-  { id: 'material-out', label: 'Material-Out', icon: PackageOpen },
-  { id: 'job-report', label: 'Job Report', icon: ClipboardList },
-  { id: 'seller-report', label: 'Seller Report', icon: ClipboardList },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+  { id: 'materials', label: 'Material-In', icon: Package, path: '/material-in' },
+  { id: 'material-out', label: 'Material-Out', icon: PackageOpen, path: '/material-out' },
+  { id: 'job-report', label: 'Job Report', icon: ClipboardList, path: '/job-report' },
+  { id: 'seller-report', label: 'Seller Report', icon: ClipboardList, path: '/seller-report' },
 ];
 
-export default function Sidebar({ activePage, onNavigate }) {
+export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -44,22 +45,23 @@ export default function Sidebar({ activePage, onNavigate }) {
 
       {/* Nav items */}
       <nav className="flex-1 py-4 space-y-1 px-2">
-        {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
-          const active = activePage === id;
+        {NAV_ITEMS.map(({ id, label, icon: Icon, path }) => {
           return (
-            <button
+            <NavLink
               key={id}
-              onClick={() => onNavigate(id)}
+              to={path}
               title={collapsed ? label : undefined}
-              className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-md text-sm font-medium transition-colors ${
-                active
-                  ? 'bg-[#2563EB] text-white'
-                  : 'text-slate-300 hover:bg-[#334155] hover:text-white'
-              }`}
+              className={({ isActive }) => 
+                `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-md text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-[#2563EB] text-white'
+                    : 'text-slate-300 hover:bg-[#334155] hover:text-white'
+                }`
+              }
             >
               <Icon size={18} className="flex-shrink-0" />
               {!collapsed && <span className="truncate">{label}</span>}
-            </button>
+            </NavLink>
           );
         })}
       </nav>
