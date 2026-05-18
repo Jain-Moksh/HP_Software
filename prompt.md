@@ -8,13 +8,14 @@ HP Accounting Software is a specialized inventory and financial management syste
 
 ### Frontend
 - **Framework**: React 18+ (Vite)
-- **Routing**: React Router DOM (v6+) — Uses URL-based navigation for all pages and detail views (e.g., `/job-report/:id`).
+- **Routing**: React Router DOM (v6+) — Uses URL-based navigation for all pages and detail views (e.g., `/job-report/:id`, `/seller-report/:id`).
 - **Styling**: Vanilla CSS (Premium theme with Slate/Blue palette)
 - **Icons**: Lucide React
 - **State Management**: Local React state (`useState`, `useEffect`) combined with `useOutletContext` for dynamic header actions.
 - **Components**: 
   - `DataTable.jsx`: Reusable table with inline editing, computed fields, and deletion support.
   - `DateField.jsx`: Specialized date input with shortcut support.
+  - `DeleteMasterModal.jsx`: Modal for confirmation of deleting jobbers/sellers.
   - `MainLayout.jsx`: Master layout with a persistent sidebar and dynamic header.
 
 ### Backend
@@ -31,9 +32,9 @@ HP Accounting Software is a specialized inventory and financial management syste
 HP_Accounting_Software/
 ├── client/                 # React Frontend
 │   ├── src/
-│   │   ├── components/     # UI Components (DataTable, Header, Sidebar, DateField)
+│   │   ├── components/     # UI Components (DataTable, Header, Sidebar, DateField, DeleteMasterModal)
 │   │   ├── layouts/        # Page Layouts (MainLayout with dynamic Header)
-│   │   ├── pages/          # Application Views (Dashboard, Material-In, Material-Out, Reports)
+│   │   ├── pages/          # Application Views (Material-In, Material-Out, Reports)
 │   │   ├── App.jsx         # Router & Route Definitions
 │   │   ├── config.js       # Centralized API Base URL (LAN-aware)
 │   │   └── index.css       # Global Styles (Vanilla CSS)
@@ -43,6 +44,7 @@ HP_Accounting_Software/
 │   ├── routes/             # API Endpoint Definitions
 │   ├── migrate.js          # DB Migration Script
 │   ├── schema.sql          # DB Initialization Script
+│   ├── setup-db.js         # DB Setup & Remark Verification Script
 │   └── index.js            # Entry Point & LAN Auto-Discovery
 ├── api.md                  # API Documentation
 ├── db.md                   # Database Schema Reference
@@ -77,7 +79,7 @@ HP_Accounting_Software/
 - **Local Network Access**: 
   - The server binds to all network interfaces (`0.0.0.0` or local IP).
   - Vite is configured with `host: true` to serve the frontend over the network.
-  - `client/src/config.js` dynamically determines the `API_BASE_URL` based on the current window location, allowing seamless use on multiple devices (Phones, Tablets, Laptops) within the same WiFi network.
+  - `client/src/config.js` uses a relative path `'/api'` for `API_BASE_URL`, allowing seamless use on multiple devices (Phones, Tablets, Laptops) within the same WiFi network because the Express server serves both the React app and the API.
 - **Secure Deletion**: 
   - Deleting transactions or adjustments requires the `x-delete-password` header.
   - Deleting masters (Jobbers/Sellers) requires the password in the request body.

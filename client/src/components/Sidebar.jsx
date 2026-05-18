@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Package, PackageOpen, ClipboardList, Menu, X, ChevronRight } from 'lucide-react';
+import { Package, PackageOpen, ClipboardList, Menu, ChevronRight } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
   { id: 'materials', label: 'Material-In', icon: Package, path: '/material-in' },
   { id: 'material-out', label: 'Material-Out', icon: PackageOpen, path: '/material-out' },
   { id: 'job-report', label: 'Job Report', icon: ClipboardList, path: '/job-report' },

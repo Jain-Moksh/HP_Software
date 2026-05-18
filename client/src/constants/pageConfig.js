@@ -1,8 +1,4 @@
 export const PAGE_CONFIG = {
-  '/dashboard': {
-    title: 'Accounting Dashboard',
-    subtitle: 'Financial Management System'
-  },
   '/material-in': {
     title: 'Material In Records',
     subtitle: 'Manage and track all material entries'

@@ -71,3 +71,9 @@ CREATE TABLE IF NOT EXISTS seller_adjustments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Performance Indexes
+CREATE INDEX IF NOT EXISTS idx_in_jobber ON transactions_in(jobber_id);
+CREATE INDEX IF NOT EXISTS idx_in_date ON transactions_in(date);
+CREATE INDEX IF NOT EXISTS idx_out_jobber ON transactions_out(jobber_id);
+CREATE INDEX IF NOT EXISTS idx_out_date ON transactions_out(date);
+

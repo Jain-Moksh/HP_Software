@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './layouts/MainLayout';
-import Dashboard from './pages/Dashboard';
 import MaterialIn from './pages/Material-In';
 import MaterialOut from './pages/Material-Out';
 import JobReport from './pages/JobReport';
@@ -13,11 +12,10 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<MainLayout />}>
-          {/* Redirect root to dashboard */}
-          <Route index element={<Navigate to="/dashboard" replace />} />
+          {/* Redirect root to material-in */}
+          <Route index element={<Navigate to="/material-in" replace />} />
           
           {/* Main Pages */}
-          <Route path="dashboard" element={<Dashboard />} />
           <Route path="material-in" element={<MaterialIn />} />
           <Route path="material-out" element={<MaterialOut />} />
           
@@ -34,7 +32,7 @@ export default function App() {
             <div className="flex flex-col items-center justify-center h-full gap-4">
               <h1 className="text-4xl font-bold text-[#1E293B]">404</h1>
               <p className="text-[#64748B]">Page not found</p>
-              <Navigate to="/dashboard" replace />
+              <Navigate to="/material-in" replace />
             </div>
           } />
         </Route>

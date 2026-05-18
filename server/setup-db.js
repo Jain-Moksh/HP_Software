@@ -21,7 +21,7 @@ async function setup() {
 
     console.log('\nStep 1: Running schema.sql (this will not delete existing data)...');
     await pool.query(schemaSql);
-    console.log('✅ All tables (Master, Transactions, Adjustments, and Material) are ready.');
+    console.log('✅ All tables (Master, Transactions, Adjustments) and performance indexes are ready.');
 
     console.log('\nStep 2: Checking migrations...');
     // Add remark columns if they don't exist (just in case they aren't in schema.sql yet)
