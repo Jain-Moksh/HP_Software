@@ -9,7 +9,7 @@ HP Accounting Software is a specialized inventory and financial management syste
 ### Frontend
 - **Framework**: React 18+ (Vite)
 - **Routing**: React Router DOM (v6+) — Uses URL-based navigation for all pages and detail views (e.g., `/job-report/:id`, `/seller-report/:id`).
-- **Styling**: Vanilla CSS (Premium theme with Slate/Blue palette)
+- **Styling**: Tailwind CSS (Premium theme with Slate/Blue palette, custom layers, and Google Fonts Inter typography)
 - **Icons**: Lucide React
 - **State Management**: Local React state (`useState`, `useEffect`) combined with `useOutletContext` for dynamic header actions.
 - **Components**: 
@@ -33,11 +33,12 @@ HP_Accounting_Software/
 ├── client/                 # React Frontend
 │   ├── src/
 │   │   ├── components/     # UI Components (DataTable, Header, Sidebar, DateField, DeleteMasterModal)
+│   │   ├── constants/      # App Constants & Configurations (pageConfig.js)
 │   │   ├── layouts/        # Page Layouts (MainLayout with dynamic Header)
 │   │   ├── pages/          # Application Views (Material-In, Material-Out, Reports)
 │   │   ├── App.jsx         # Router & Route Definitions
 │   │   ├── config.js       # Centralized API Base URL (LAN-aware)
-│   │   └── index.css       # Global Styles (Vanilla CSS)
+│   │   └── index.css       # Global Styles (Tailwind CSS with Google Fonts directives)
 ├── server/                 # Express Backend
 │   ├── config/             # DB Connection (PostgreSQL)
 │   ├── controllers/        # Route Handlers (Transaction, Report, Adjustment logic)
