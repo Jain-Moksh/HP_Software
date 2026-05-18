@@ -36,6 +36,14 @@ The HP Accounting Software backend is a RESTful API built with Express.js.
 | `/api/transactions/in/:id` | `DELETE` | Delete inward entry* |
 | `/api/transactions/in/:jobberId` | `GET` | List inward transactions for a specific jobber |
 
+### Material Transfers (Internal Stock Movement)
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/transactions/transfer` | `GET` | List all material transfers |
+| `/api/transactions/transfer` | `POST` | Create material transfer `{ from_jobber_id, to_jobber_id, type1, type2, material, date, remark }` |
+| `/api/transactions/transfer/:id` | `PUT` | Update material transfer `{ from_jobber_id, to_jobber_id, type1, type2, material, date, remark }` |
+| `/api/transactions/transfer/:id` | `DELETE` | Delete material transfer* |
+
 ### Material-Out
 | Endpoint | Method | Description |
 |---|---|---|
@@ -92,8 +100,6 @@ The HP Accounting Software backend is a RESTful API built with Express.js.
 
 ## 🛡️ Notes & Security
 
-- **Security**: Deletion for Transactions and Adjustments requires the `x-delete-password` header. Deletion for Masters (Jobbers/Sellers) requires the password in the JSON request body.
+- **Security**: Deletion for Transactions, Material Transfers, and Adjustments requires the `x-delete-password` header. Deletion for Masters (Jobbers/Sellers) requires the password in the JSON request body.
 - **Auto-Creation**: Masters are automatically created by the frontend/backend if a new name is provided during transaction entry.
 - **Title Case**: All names and remarks are automatically converted to Title Case on the backend.
-
-

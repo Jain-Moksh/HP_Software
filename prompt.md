@@ -8,7 +8,17 @@ HP Accounting Software is a specialized inventory and financial management syste
 
 ### Frontend
 - **Framework**: React 18+ (Vite)
-- **Routing**: React Router DOM (v6+) — Uses URL-based navigation for all pages and detail views (e.g., `/job-report/:id`, `/seller-report/:id`).
+- **Routing**: React Router DOM (v6+) — Uses URL-based navigation. Defined routes include:
+  - `/material-in` (Material Inward entry and list)
+  - `/material-transfer` (Jobber-to-Jobber stock transfers)
+  - `/material-out` (Material Outward entry and list)
+  - `/job-report` (Jobbers list and master summary)
+  - `/job-report/:id` (Detailed jobber ledger and monthly stock report)
+  - `/seller-report` (Sellers list and master summary)
+  - `/seller-report/:id` (Detailed seller transaction and payment history)
+  - `/utility` (Main utility hub dashboard)
+  - `/utility/backup` (Database backup configuration and downloads)
+  - `/utility/restore` (Database restoration interface)
 - **Styling**: Tailwind CSS (Premium theme with Slate/Blue palette, custom layers, and Google Fonts Inter typography)
 - **Icons**: Lucide React
 - **State Management**: Local React state (`useState`, `useEffect`) combined with `useOutletContext` for dynamic header actions.
@@ -35,14 +45,24 @@ HP_Accounting_Software/
 │   │   ├── components/     # UI Components (DataTable, Header, Sidebar, DateField, DeleteMasterModal)
 │   │   ├── constants/      # App Constants & Configurations (pageConfig.js)
 │   │   ├── layouts/        # Page Layouts (MainLayout with dynamic Header)
-│   │   ├── pages/          # Application Views (Material-In, Material-Transfer, Material-Out, Reports)
+│   │   ├── pages/          # Application Views
+│   │   │   ├── Material-In.jsx        # Inward entries management
+│   │   │   ├── Material-Transfer.jsx  # Jobber to Jobber physical transfers
+│   │   │   ├── Material-Out.jsx       # Outward entries management
+│   │   │   ├── JobReport.jsx          # Jobbers overview and search
+│   │   │   ├── JobReportDetail.jsx    # Detailed Ledger, Stock IN/OUT/Transfer reports
+│   │   │   ├── SellerReport.jsx       # Sellers list and overall balances
+│   │   │   ├── SellerReportDetail.jsx # Seller transaction history, adjustments/payments
+│   │   │   ├── UtilityDashboard.jsx   # Access entry point for administration utilities
+│   │   │   ├── BackupManagement.jsx   # Config for background backups & manual SQL downloads
+│   │   │   └── SystemRestore.jsx      # Portal for uploading & restoring SQL database files
 │   │   ├── App.jsx         # Router & Route Definitions
 │   │   ├── config.js       # Centralized API Base URL (LAN-aware)
 │   │   └── index.css       # Global Styles (Tailwind CSS with Google Fonts directives)
 ├── server/                 # Express Backend
 │   ├── config/             # DB Connection (PostgreSQL)
-│   ├── controllers/        # Route Handlers (Transaction, Report, Adjustment logic)
-│   ├── routes/             # API Endpoint Definitions
+│   ├── controllers/        # Route Handlers (Transaction, Report, Adjustment, Utility logic)
+│   ├── routes/             # API Endpoint Definitions (Jobbers, Sellers, Transactions, Transfers, etc.)
 │   ├── migrate.js          # DB Migration Script
 │   ├── schema.sql          # DB Initialization Script
 │   ├── setup-db.js         # DB Setup & Remark Verification Script
@@ -88,8 +108,9 @@ HP_Accounting_Software/
   - Vite is configured with `host: true` to serve the frontend over the network.
   - `client/src/config.js` uses a relative path `'/api'` for `API_BASE_URL`, allowing seamless use on multiple devices (Phones, Tablets, Laptops) within the same WiFi network because the Express server serves both the React app and the API.
 - **Secure Deletion**: 
-  - Deleting transactions or adjustments requires the `x-delete-password` header.
+  - Deleting transactions, material transfers, or adjustments requires the `x-delete-password` header.
   - Deleting masters (Jobbers/Sellers) requires the password in the request body.
+  - The delete authorization password is configurable via the `del_pass` environment variable.
 - **Decimal Precision**: Numerical values use `NUMERIC` in PostgreSQL. Invoices and Reports are formatted to display consistently with 0 or 2 decimal places.
 
 ---
