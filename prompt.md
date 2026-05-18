@@ -83,6 +83,7 @@ HP_Accounting_Software/
   - **GST Flag ('B')**: Enabling the 'B' flag adds an 18% surcharge to the total amount.
 - **Auto-Master Creation**: Typing a new Jobber, Seller, or Vendor name in a combobox automatically creates that record in the database upon saving the transaction.
 - **Case Sensitivity**: All names and remarks are automatically converted to **Title Case** on the backend to maintain data consistency.
+- **Remarks Field UX**: The `remark` column across all page tables is configured to wrap text seamlessly and break words (`whitespace-pre-wrap break-words`) instead of truncating, so long remarks are fully visible and expand the row height automatically. In both inline editors and new data entry forms, the remarks input uses a vertically resizable `<textarea>` supporting `Shift + Enter` for new lines and standard `Enter` for saving.
 
 ### 2. Advanced Reporting
 - **Jobber Reports**: Consolidated ledger showing IN, OUT, and Adjustments. Calculates Dynamic Opening and Closing stocks per material type based on the selected month/year.

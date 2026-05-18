@@ -31,8 +31,8 @@ The HP Accounting Software backend is a RESTful API built with Express.js.
 | Endpoint | Method | Description |
 |---|---|---|
 | `/api/transactions/in` | `GET` | List all inward transactions |
-| `/api/transactions/in` | `POST` | Create inward entry |
-| `/api/transactions/in/:id` | `PUT` | Update inward entry |
+| `/api/transactions/in` | `POST` | Create inward entry `{ jobber_id, seller_id, type1, type2, material, rate, amount, date, remark, w, b, a }` (jobber_id, seller_id, date are required) |
+| `/api/transactions/in/:id` | `PUT` | Update inward entry `{ jobber_id, seller_id, type1, type2, material, rate, amount, date, remark, w, b, a }` |
 | `/api/transactions/in/:id` | `DELETE` | Delete inward entry* |
 | `/api/transactions/in/:jobberId` | `GET` | List inward transactions for a specific jobber |
 
@@ -48,8 +48,8 @@ The HP Accounting Software backend is a RESTful API built with Express.js.
 | Endpoint | Method | Description |
 |---|---|---|
 | `/api/transactions/out` | `GET` | List all outward transactions |
-| `/api/transactions/out` | `POST` | Create outward entry |
-| `/api/transactions/out/:id` | `PUT` | Update outward entry |
+| `/api/transactions/out` | `POST` | Create outward entry `{ jobber_id, vendor_id, type1, type2, material, rate, amount, date, remark, w, b, a }` (jobber_id, vendor_id, date are required) |
+| `/api/transactions/out/:id` | `PUT` | Update outward entry `{ jobber_id, vendor_id, type1, type2, material, rate, amount, date, remark, w, b, a }` |
 | `/api/transactions/out/:id` | `DELETE` | Delete outward entry* |
 | `/api/transactions/out/:jobberId` | `GET` | List outward transactions for a specific jobber |
 
