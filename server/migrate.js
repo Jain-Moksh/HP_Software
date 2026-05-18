@@ -1,5 +1,6 @@
 const { Pool } = require('pg');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const pool = new Pool({
   user: process.env.DB_USER,
@@ -37,8 +38,25 @@ async function migrate() {
         remark TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS material_transfers (
+        id SERIAL PRIMARY KEY,
+        from_jobber_id INTEGER REFERENCES jobbers(id) ON DELETE CASCADE,
+        to_jobber_id INTEGER REFERENCES jobbers(id) ON DELETE CASCADE,
+        type1 NUMERIC DEFAULT 0,
+        type2 NUMERIC DEFAULT 0,
+        material VARCHAR(255) NOT NULL,
+        date DATE NOT NULL,
+        remark TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT check_different_jobbers CHECK (from_jobber_id <> to_jobber_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_transfers_from_jobber ON material_transfers(from_jobber_id);
+      CREATE INDEX IF NOT EXISTS idx_transfers_to_jobber ON material_transfers(to_jobber_id);
+      CREATE INDEX IF NOT EXISTS idx_transfers_date ON material_transfers(date);
     `);
-    console.log('✅ Created jobber_adjustments and seller_adjustments tables');
+    console.log('✅ Created jobber_adjustments, seller_adjustments, and material_transfers tables with indexes');
     
     console.log('Migration completed successfully.');
     process.exit(0);

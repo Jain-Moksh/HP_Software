@@ -1,20 +1,48 @@
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+const dbName = process.env.DB_NAME || 'hp';
+
+async function ensureDatabaseExists() {
+  const tempPool = new Pool({
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    database: 'postgres',
+  });
+
+  try {
+    const res = await tempPool.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbName]);
+    if (res.rows.length === 0) {
+      console.log(`Database "${dbName}" does not exist. Creating database...`);
+      await tempPool.query(`CREATE DATABASE "${dbName}"`);
+      console.log(`✅ Database "${dbName}" created successfully.`);
+    } else {
+      console.log(`✅ Database "${dbName}" already exists.`);
+    }
+  } catch (err) {
+    console.error('Error during database check/creation:', err.message);
+  } finally {
+    await tempPool.end();
+  }
+}
 
 const pool = new Pool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   host: process.env.DB_HOST,
   port: process.env.DB_PORT,
-  database: process.env.DB_NAME,
+  database: dbName,
 });
 
 async function setup() {
   try {
     console.log('--- Initializing Database ---');
-    console.log(`Connected to: ${process.env.DB_NAME} on ${process.env.DB_HOST}`);
+    await ensureDatabaseExists();
+    console.log(`Connecting to: ${dbName} on ${process.env.DB_HOST}`);
     
     const schemaPath = path.join(__dirname, 'schema.sql');
     const schemaSql = fs.readFileSync(schemaPath, 'utf8');

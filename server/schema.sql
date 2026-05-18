@@ -71,9 +71,27 @@ CREATE TABLE IF NOT EXISTS seller_adjustments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Material Transfers (Internal Stock Movement)
+CREATE TABLE IF NOT EXISTS material_transfers (
+    id SERIAL PRIMARY KEY,
+    from_jobber_id INTEGER REFERENCES jobbers(id) ON DELETE CASCADE,
+    to_jobber_id INTEGER REFERENCES jobbers(id) ON DELETE CASCADE,
+    type1 NUMERIC DEFAULT 0,
+    type2 NUMERIC DEFAULT 0,
+    material VARCHAR(255) NOT NULL,
+    date DATE NOT NULL,
+    remark TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT check_different_jobbers CHECK (from_jobber_id <> to_jobber_id)
+);
+
 -- Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_in_jobber ON transactions_in(jobber_id);
 CREATE INDEX IF NOT EXISTS idx_in_date ON transactions_in(date);
 CREATE INDEX IF NOT EXISTS idx_out_jobber ON transactions_out(jobber_id);
 CREATE INDEX IF NOT EXISTS idx_out_date ON transactions_out(date);
+CREATE INDEX IF NOT EXISTS idx_transfers_from_jobber ON material_transfers(from_jobber_id);
+CREATE INDEX IF NOT EXISTS idx_transfers_to_jobber ON material_transfers(to_jobber_id);
+CREATE INDEX IF NOT EXISTS idx_transfers_date ON material_transfers(date);
+
 

@@ -3,6 +3,10 @@ export const PAGE_CONFIG = {
     title: 'Material In Records',
     subtitle: 'Manage and track all material entries'
   },
+  '/material-transfer': {
+    title: 'Material Transfer Records',
+    subtitle: 'Track internal stock movements between jobbers'
+  },
   '/material-out': {
     title: 'Material Out Records',
     subtitle: 'Track and manage material shipments'
@@ -14,6 +18,18 @@ export const PAGE_CONFIG = {
   '/seller-report': {
     title: 'Seller Reports',
     subtitle: 'Overview of all sellers and balances'
+  },
+  '/utility': {
+    title: 'UTILITY DASHBOARD',
+    subtitle: 'SYSTEM TOOLS, CONFIGURATIONS AND MAINTENANCE'
+  },
+  '/utility/backup': {
+    title: 'BACKUP MANAGEMENT',
+    subtitle: 'MANUAL AND AUTOMATIC DATABASE PROTECTION'
+  },
+  '/utility/restore': {
+    title: 'SYSTEM RESTORE',
+    subtitle: 'RECOVER DATABASE FROM BACKUP FILES'
   },
 };
 

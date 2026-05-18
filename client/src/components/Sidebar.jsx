@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Package, PackageOpen, ClipboardList, Menu, ChevronRight } from 'lucide-react';
+import { Package, PackageOpen, ClipboardList, Menu, ChevronRight, RefreshCw, Settings } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'materials', label: 'Material-In', icon: Package, path: '/material-in' },
+  { id: 'material-transfer', label: 'Material Transfer', icon: RefreshCw, path: '/material-transfer' },
   { id: 'material-out', label: 'Material-Out', icon: PackageOpen, path: '/material-out' },
   { id: 'job-report', label: 'Job Report', icon: ClipboardList, path: '/job-report' },
   { id: 'seller-report', label: 'Seller Report', icon: ClipboardList, path: '/seller-report' },
@@ -65,9 +66,27 @@ export default function Sidebar() {
         })}
       </nav>
 
+      {/* Bottom Utility Link */}
+      <div className="px-2 py-2 border-t border-white/10 flex-shrink-0">
+        <NavLink
+          to="/utility"
+          title={collapsed ? "Utility" : undefined}
+          className={({ isActive }) => 
+            `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-md text-sm font-medium transition-colors ${
+              isActive
+                ? 'bg-[#2563EB] text-white'
+                : 'text-slate-300 hover:bg-[#334155] hover:text-white'
+            }`
+          }
+        >
+          <Settings size={18} className="flex-shrink-0" />
+          {!collapsed && <span className="truncate">Utility</span>}
+        </NavLink>
+      </div>
+
       {/* Footer hint */}
       {!collapsed && (
-        <div className="px-4 py-3 border-t border-white/10 text-xs text-slate-500 select-none">
+        <div className="px-4 py-2 text-[10px] text-slate-500 select-none uppercase tracking-wider font-semibold">
           Accounting System
         </div>
       )}

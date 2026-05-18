@@ -14,9 +14,11 @@ The HP Accounting Software backend is a RESTful API built with Express.js.
 |---|---|---|
 | `/api/jobbers` | `GET` | List all jobbers |
 | `/api/jobbers` | `POST` | Create a jobber `{ name }` |
+| `/api/jobbers/:id` | `PUT` | Rename a jobber `{ name }` |
 | `/api/jobbers/:id` | `DELETE` | Delete a jobber — Body: `{ password }` |
 | `/api/sellers` | `GET` | List all sellers |
 | `/api/sellers` | `POST` | Create a seller `{ name }` |
+| `/api/sellers/:id` | `PUT` | Rename a seller `{ name }` |
 | `/api/sellers/:id` | `DELETE` | Delete a seller — Body: `{ password }` |
 | `/api/vendors` | `GET` | List all vendors |
 | `/api/vendors` | `POST` | Create a vendor `{ name }` |
@@ -74,6 +76,17 @@ The HP Accounting Software backend is a RESTful API built with Express.js.
 - `POST /api/seller-adjustments`: Create adjustment `{ seller_id, amount, date, remark }`.
 - `PUT /api/seller-adjustments/:id`: Update adjustment.
 - `DELETE /api/seller-adjustments/:id`: Delete adjustment.*
+
+---
+
+## 🔧 Utility Tools
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/utility/backup/config` | `GET` | Retrieve the automatic backup settings |
+| `/api/utility/backup/config` | `POST` | Update the automatic backup settings `{ enabled, interval, path }` |
+| `/api/utility/backup/download` | `GET` | Stream and download a manual `.sql` snapshot of the database |
+| `/api/utility/restore` | `POST` | Upload and restore the system state from a `.sql` backup file `{ sql }` |
 
 ---
 

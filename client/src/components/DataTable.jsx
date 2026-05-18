@@ -105,6 +105,7 @@ export const EditCombobox = ({ field, value, options, onChange, onAddNew, onAddN
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
   const wrapperRef = useRef(null);
   const inputRef = useRef(null);
+  const dropdownRef = useRef(null);
 
   // Sync internal state if prop changes (e.g. after save)
   useEffect(() => {
@@ -195,7 +196,9 @@ export const EditCombobox = ({ field, value, options, onChange, onAddNew, onAddN
   // Close list on click outside
   useEffect(() => {
     const clickHandler = (e) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+      const insideWrapper = wrapperRef.current && wrapperRef.current.contains(e.target);
+      const insideDropdown = dropdownRef.current && dropdownRef.current.contains(e.target);
+      if (!insideWrapper && !insideDropdown) {
         setIsOpen(false);
       }
     };
@@ -224,6 +227,7 @@ export const EditCombobox = ({ field, value, options, onChange, onAddNew, onAddN
       
       {isOpen && createPortal(
         <div 
+          ref={dropdownRef}
           className="fixed z-[9999] bg-white border border-[#93C5FD] rounded shadow-xl max-h-48 overflow-y-auto ring-1 ring-black ring-opacity-5"
           style={{
             top: `${coords.top}px`,
@@ -620,7 +624,7 @@ export default function DataTable({
                           >
                             <Save size={13} />
                           </button>
-                        ) : (
+                        ) : !row.readOnly ? (
                           <button
                             title="Edit"
                             onClick={() => startEdit(row)}
@@ -628,7 +632,7 @@ export default function DataTable({
                           >
                             <Pencil size={13} />
                           </button>
-                        )}
+                        ) : null}
 
                         <button
                           title="Delete"

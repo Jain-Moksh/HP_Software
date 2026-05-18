@@ -35,7 +35,7 @@ HP_Accounting_Software/
 │   │   ├── components/     # UI Components (DataTable, Header, Sidebar, DateField, DeleteMasterModal)
 │   │   ├── constants/      # App Constants & Configurations (pageConfig.js)
 │   │   ├── layouts/        # Page Layouts (MainLayout with dynamic Header)
-│   │   ├── pages/          # Application Views (Material-In, Material-Out, Reports)
+│   │   ├── pages/          # Application Views (Material-In, Material-Transfer, Material-Out, Reports)
 │   │   ├── App.jsx         # Router & Route Definitions
 │   │   ├── config.js       # Centralized API Base URL (LAN-aware)
 │   │   └── index.css       # Global Styles (Tailwind CSS with Google Fonts directives)
@@ -71,6 +71,12 @@ HP_Accounting_Software/
 
 ### 3. Adjustment System
 - **Payments & Deductions**: Manual financial corrections (Credits/Debits) can be added to Jobber and Seller accounts via the "PAY" or "Adjustment" buttons in report views. These affect financial balances without altering physical stock counts.
+
+### 4. Material Transfers
+- **Internal Movement**: Physical material movements directly from a sender Jobber to a receiver Jobber. Lacks rates, billing, or GST flags.
+- **Stock Calculations**: Outbound transfers decrease the sender's live stock; inbound transfers increase the receiver's live stock in all stock reports and jobber ledgers.
+- **Report Placement**: Outbound transfers are listed in the Jobber Report under **Material Outward (OUT)**, and inbound transfers are listed under **Material Inward (IN)**.
+- **Read-Only Ledger Rows**: Transfer records shown in jobber ledger reports are flagged as read-only (omits editing inline) to ensure database integrity between the two jobber accounts. They can still be deleted securely via administrator password.
 
 ---
 

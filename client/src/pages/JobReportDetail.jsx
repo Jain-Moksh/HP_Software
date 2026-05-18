@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
-import { ArrowLeft, TrendingUp, TrendingDown, Box, Plus } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Box, Plus, IndianRupee, Pencil } from 'lucide-react';
 import DataTable, { EditCombobox } from '../components/DataTable';
+import EditMasterModal from '../components/EditMasterModal';
 import API_BASE_URL from '../config';
 
 const IN_COLUMNS = [
@@ -129,6 +130,7 @@ export default function JobReportDetail() {
    const [selectedYear, setSelectedYear] = useState(currentYear);
    const [activeMonth, setActiveMonth]   = useState(currentMonth);
    const [showAdjEntry, setShowAdjEntry] = useState(false);
+   const [editModal, setEditModal] = useState({ isOpen: false, jobberId: null, jobberName: '' });
 
   const fetchMasters = async () => {
     try {
@@ -150,6 +152,27 @@ export default function JobReportDetail() {
     } catch (err) {
       console.error('Master fetch error:', err);
       setLoading(false);
+    }
+  };
+
+  const handleEditJobber = async (newName) => {
+    try {
+      const resp = await fetch(`${API_BASE_URL}/jobbers/${jobber.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      
+      const data = await resp.json();
+      if (resp.ok) {
+        setEditModal({ isOpen: false, jobberId: null, jobberName: '' });
+        await fetchMasters(); // This will refresh the jobber and subsequently fetch the new report!
+      } else {
+        alert(data.error || 'Failed to rename jobber');
+      }
+    } catch (err) {
+      console.error('Rename error:', err);
+      alert('An error occurred while renaming');
     }
   };
 
@@ -243,6 +266,8 @@ export default function JobReportDetail() {
       let url = `${API_BASE_URL}/transactions/${tx_type === 'IN' ? 'in' : 'out'}/${id}`;
       if (tx_type === 'OUT_ADJ') {
         url = `${API_BASE_URL}/adjustments/${id}`;
+      } else if (tx_type === 'TRANSFER_IN' || tx_type === 'TRANSFER_OUT') {
+        url = `${API_BASE_URL}/transactions/transfer/${id}`;
       }
 
       const resp = await fetch(url, {
@@ -307,8 +332,29 @@ export default function JobReportDetail() {
     );
   }
 
-  const allTransactions = report?.transactions || [];
+  const rawTransactions = report?.transactions || [];
   const baseOpening = report?.openingStock || { type1: 0, type2: 0 };
+
+  const allTransactions = rawTransactions.map(tx => {
+    if (tx.tx_type === 'TRANSFER_IN') {
+      return {
+        ...tx,
+        seller: `From: ${tx.from_jobber || 'Jobber'}`,
+        readOnly: true,
+        w: '---', b: '---', a: '---'
+      };
+    }
+    if (tx.tx_type === 'TRANSFER_OUT') {
+      return {
+        ...tx,
+        vendor: `To: ${tx.to_jobber || 'Jobber'}`,
+        readOnly: true,
+        rate: '---',
+        amount: '---'
+      };
+    }
+    return tx;
+  });
 
   // Calculate Dynamic Opening Stock (balance before the selected month/year)
   const openingStock = allTransactions.reduce((acc, tx) => {
@@ -316,10 +362,10 @@ export default function JobReportDetail() {
     const m = d.getMonth();
     const y = d.getFullYear();
     if (y < selectedYear || (y === selectedYear && m < activeMonth)) {
-      if (tx.tx_type === 'IN') {
+      if (tx.tx_type === 'IN' || tx.tx_type === 'TRANSFER_IN') {
         acc.type1 += (Number(tx.type1) || 0);
         acc.type2 += (Number(tx.type2) || 0);
-      } else if (tx.tx_type === 'OUT') {
+      } else if (tx.tx_type === 'OUT' || tx.tx_type === 'TRANSFER_OUT') {
         acc.type1 -= (Number(tx.type1) || 0);
         acc.type2 -= (Number(tx.type2) || 0);
       }
@@ -333,10 +379,10 @@ export default function JobReportDetail() {
     const m = d.getMonth();
     const y = d.getFullYear();
     if (y === selectedYear && m === activeMonth) {
-      if (tx.tx_type === 'IN') {
+      if (tx.tx_type === 'IN' || tx.tx_type === 'TRANSFER_IN') {
         acc.type1 += (Number(tx.type1) || 0);
         acc.type2 += (Number(tx.type2) || 0);
-      } else if (tx.tx_type === 'OUT') {
+      } else if (tx.tx_type === 'OUT' || tx.tx_type === 'TRANSFER_OUT') {
         acc.type1 -= (Number(tx.type1) || 0);
         acc.type2 -= (Number(tx.type2) || 0);
       }
@@ -349,9 +395,40 @@ export default function JobReportDetail() {
     type2: openingStock.type2 + currentNet.type2
   };
 
-  const inTransactions = allTransactions.filter(t => t.tx_type === 'IN');
+  // Calculate Dynamic Opening/Closing Financial Balances (Amounts)
+  const openingAmount = allTransactions.reduce((acc, tx) => {
+    const d = new Date(tx.date);
+    const m = d.getMonth();
+    const y = d.getFullYear();
+    if (y < selectedYear || (y === selectedYear && m < activeMonth)) {
+      if (tx.tx_type === 'OUT') {
+        acc += (Number(tx.amount) || 0);
+      } else if (tx.tx_type === 'OUT_ADJ') {
+        acc -= (Number(tx.amount) || 0);
+      }
+    }
+    return acc;
+  }, 0);
+
+  const currentNetAmount = allTransactions.reduce((acc, tx) => {
+    const d = new Date(tx.date);
+    const m = d.getMonth();
+    const y = d.getFullYear();
+    if (y === selectedYear && m === activeMonth) {
+      if (tx.tx_type === 'OUT') {
+        acc += (Number(tx.amount) || 0);
+      } else if (tx.tx_type === 'OUT_ADJ') {
+        acc -= (Number(tx.amount) || 0);
+      }
+    }
+    return acc;
+  }, 0);
+
+  const closingAmount = openingAmount + currentNetAmount;
+
+  const inTransactions = allTransactions.filter(t => t.tx_type === 'IN' || t.tx_type === 'TRANSFER_IN');
   const outTransactions = allTransactions
-    .filter(t => t.tx_type === 'OUT' || t.tx_type === 'OUT_ADJ')
+    .filter(t => t.tx_type === 'OUT' || t.tx_type === 'OUT_ADJ' || t.tx_type === 'TRANSFER_OUT')
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
   // Month filtering years
@@ -376,6 +453,13 @@ export default function JobReportDetail() {
           <div>
             <h1 className="text-xl font-bold text-[#0F172A] flex items-center gap-2">
               {jobber?.name} 
+              <button 
+                onClick={() => setEditModal({ isOpen: true, jobberId: jobber.id, jobberName: jobber.name })}
+                className="p-1 text-[#94A3B8] hover:text-[#2563EB] hover:bg-blue-50 rounded transition-all"
+                title="Rename Jobber"
+              >
+                <Pencil size={14} />
+              </button>
               <span className="text-[10px] font-medium bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full uppercase tracking-wider">Jobber Report</span>
             </h1>
             <p className="text-xs text-[#64748B]">Overview & Transaction History</p>
@@ -413,6 +497,24 @@ export default function JobReportDetail() {
                    <span className="text-xl font-extrabold text-[#0F172A] leading-tight">{closingStock.type2}</span>
                 </div>
              </div>
+          </div>
+          <div className="w-[1px] h-10 bg-slate-200" />
+          <div className="flex flex-col items-end">
+             <span className="text-[10px] items-center gap-1 uppercase font-bold text-[#64748B] flex mb-1">
+                <IndianRupee size={10} className="text-violet-500" /> Opening Balance
+             </span>
+             <span className="text-xl font-extrabold text-violet-600 leading-tight">
+                ₹{openingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+             </span>
+          </div>
+          <div className="w-[1px] h-10 bg-slate-200" />
+          <div className="flex flex-col items-end">
+             <span className="text-[10px] items-center gap-1 uppercase font-bold text-[#64748B] flex mb-1">
+                <IndianRupee size={10} className="text-pink-500" /> Closing Balance
+             </span>
+             <span className="text-xl font-extrabold text-pink-600 leading-tight">
+                ₹{closingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+             </span>
           </div>
         </div>
       </div>
@@ -518,6 +620,13 @@ export default function JobReportDetail() {
           </div>
         </div>
       </div>
+      <EditMasterModal
+        isOpen={editModal.isOpen}
+        title={`Rename ${editModal.jobberName}`}
+        initialName={editModal.jobberName}
+        onClose={() => setEditModal({ isOpen: false, jobberId: null, jobberName: '' })}
+        onConfirm={handleEditJobber}
+      />
     </div>
   );
 }

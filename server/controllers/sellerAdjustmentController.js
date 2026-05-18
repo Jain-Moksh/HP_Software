@@ -8,6 +8,9 @@ const toTitleCase = (str) => {
 exports.createAdjustment = async (req, res) => {
   try {
     const { seller_id, amount, date, remark } = req.body;
+    if (!seller_id || amount === undefined || amount === null || !date) {
+        return res.status(400).json({ error: 'Seller ID, Amount, and Date are required' });
+    }
     const result = await db.query(
       'INSERT INTO seller_adjustments (seller_id, amount, date, remark) VALUES ($1, $2, $3, $4) RETURNING *',
       [seller_id, amount, date, toTitleCase(remark)]
@@ -34,6 +37,9 @@ exports.updateAdjustment = async (req, res) => {
   try {
     const { id } = req.params;
     const { amount, date, remark } = req.body;
+    if (amount === undefined || amount === null || !date) {
+        return res.status(400).json({ error: 'Amount and Date are required' });
+    }
     const result = await db.query(
       'UPDATE seller_adjustments SET amount = $1, date = $2, remark = $3 WHERE id = $4 RETURNING *',
       [amount, date, toTitleCase(remark), id]

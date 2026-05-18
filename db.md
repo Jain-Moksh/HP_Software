@@ -66,6 +66,19 @@ Records material flowing from **Jobbers** to **Vendors**.
 | `w`, `b`, `a` | BOOLEAN | Category flags |
 | `created_at` | TIMESTAMP | Creation timestamp |
 
+### `material_transfers`
+Records internal physical stock transfers from a sender **Jobber** to a receiver **Jobber**.
+| Column | Type | Description |
+|---|---|---|
+| `id` | SERIAL | Primary Key |
+| `from_jobber_id` | INTEGER | FK → `jobbers.id` (ON DELETE CASCADE, sender) |
+| `to_jobber_id` | INTEGER | FK → `jobbers.id` (ON DELETE CASCADE, receiver) |
+| `type1`, `type2` | NUMERIC | Quantities |
+| `material` | VARCHAR(255) | Description |
+| `date` | DATE | Transfer date |
+| `remark` | TEXT | Optional notes |
+| `created_at` | TIMESTAMP | Creation timestamp |
+
 ---
 
 ## 🔧 Adjustment Tables
@@ -102,6 +115,9 @@ To ensure fast reporting and filtering, the following indexes are implemented:
 - **`idx_in_date`**: `transactions_in(date)`
 - **`idx_out_jobber`**: `transactions_out(jobber_id)`
 - **`idx_out_date`**: `transactions_out(date)`
+- **`idx_transfers_from_jobber`**: `material_transfers(from_jobber_id)`
+- **`idx_transfers_to_jobber`**: `material_transfers(to_jobber_id)`
+- **`idx_transfers_date`**: `material_transfers(date)`
 
 ---
 

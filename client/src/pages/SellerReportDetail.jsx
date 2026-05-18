@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
-import { ArrowLeft, Box, Truck, Plus } from 'lucide-react';
+import { ArrowLeft, Box, Truck, Plus, IndianRupee, Pencil } from 'lucide-react';
 import DataTable from '../components/DataTable';
+import EditMasterModal from '../components/EditMasterModal';
 import API_BASE_URL from '../config';
 
 const COLUMNS = [
@@ -107,6 +108,7 @@ export default function SellerReportDetail() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [activeMonth, setActiveMonth]   = useState(currentMonth);
   const [showAdjEntry, setShowAdjEntry] = useState(false);
+  const [editModal, setEditModal] = useState({ isOpen: false, sellerId: null, sellerName: '' });
 
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
   const visibleMonths = (selectedYear === currentYear) ? MONTHS.slice(0, currentMonth + 1) : MONTHS;
@@ -129,6 +131,27 @@ export default function SellerReportDetail() {
     } catch (err) {
       console.error('Master fetch error:', err);
       setLoading(false);
+    }
+  };
+
+  const handleEditSeller = async (newName) => {
+    try {
+      const resp = await fetch(`${API_BASE_URL}/sellers/${seller.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      
+      const data = await resp.json();
+      if (resp.ok) {
+        setEditModal({ isOpen: false, sellerId: null, sellerName: '' });
+        await fetchMasters(); // This will refresh the seller and subsequently fetch the new report!
+      } else {
+        alert(data.error || 'Failed to rename seller');
+      }
+    } catch (err) {
+      console.error('Rename error:', err);
+      alert('An error occurred while renaming');
     }
   };
 
@@ -179,6 +202,12 @@ export default function SellerReportDetail() {
     }
     try {
       if (updatedRow.tx_type === 'IN_ADJ' || updatedRow.isDraft) {
+        if (!updatedRow.date) {
+          alert('Please enter a valid date');
+          fetchReport(); // reload to clear invalid draft state
+          return;
+        }
+
         const isNew = updatedRow.isDraft;
         const url = isNew 
           ? `${API_BASE_URL}/seller-adjustments`
@@ -274,6 +303,37 @@ export default function SellerReportDetail() {
     .filter(t => !t.tx_type || t.tx_type === 'IN' || t.tx_type === 'IN_ADJ')
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
+  // Calculate Dynamic Opening/Closing Financial Balances (Amounts)
+  const openingAmount = transactions.reduce((acc, tx) => {
+    const d = new Date(tx.date);
+    const m = d.getMonth();
+    const y = d.getFullYear();
+    if (y < selectedYear || (y === selectedYear && m < activeMonth)) {
+      if (tx.tx_type === 'IN') {
+        acc += (Number(tx.amount) || 0);
+      } else if (tx.tx_type === 'IN_ADJ') {
+        acc -= (Number(tx.amount) || 0);
+      }
+    }
+    return acc;
+  }, 0);
+
+  const currentNetAmount = transactions.reduce((acc, tx) => {
+    const d = new Date(tx.date);
+    const m = d.getMonth();
+    const y = d.getFullYear();
+    if (y === selectedYear && m === activeMonth) {
+      if (tx.tx_type === 'IN') {
+        acc += (Number(tx.amount) || 0);
+      } else if (tx.tx_type === 'IN_ADJ') {
+        acc -= (Number(tx.amount) || 0);
+      }
+    }
+    return acc;
+  }, 0);
+
+  const closingAmount = openingAmount + currentNetAmount;
+
   return (
     <div className="flex flex-col h-screen bg-[#F8FAFC]">
       {/* ── Compact Sticky Header ── */}
@@ -285,9 +345,36 @@ export default function SellerReportDetail() {
           <div>
             <h1 className="text-xl font-bold text-[#0F172A] flex items-center gap-2">
               {seller?.name}
+              <button 
+                onClick={() => setEditModal({ isOpen: true, sellerId: seller.id, sellerName: seller.name })}
+                className="p-1 text-[#94A3B8] hover:text-[#2563EB] hover:bg-blue-50 rounded transition-all"
+                title="Rename Seller"
+              >
+                <Pencil size={14} />
+              </button>
               <span className="text-[10px] font-medium bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full uppercase tracking-wider">Seller Report</span>
             </h1>
             <p className="text-xs text-[#64748B]">Historical supply and payment status</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-8">
+          <div className="flex flex-col items-end">
+             <span className="text-[10px] items-center gap-1 uppercase font-bold text-[#64748B] flex mb-1">
+                <IndianRupee size={10} className="text-violet-500" /> Opening Balance
+             </span>
+             <span className="text-xl font-extrabold text-violet-600 leading-tight">
+                ₹{openingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+             </span>
+          </div>
+          <div className="w-[1px] h-10 bg-slate-200" />
+          <div className="flex flex-col items-end">
+             <span className="text-[10px] items-center gap-1 uppercase font-bold text-[#64748B] flex mb-1">
+                <IndianRupee size={10} className="text-pink-500" /> Closing Balance
+             </span>
+             <span className="text-xl font-extrabold text-pink-600 leading-tight">
+                ₹{closingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+             </span>
           </div>
         </div>
       </div>
@@ -360,6 +447,13 @@ export default function SellerReportDetail() {
           </div>
         </div>
       </div>
+      <EditMasterModal
+        isOpen={editModal.isOpen}
+        title={`Rename ${editModal.sellerName}`}
+        initialName={editModal.sellerName}
+        onClose={() => setEditModal({ isOpen: false, sellerId: null, sellerName: '' })}
+        onConfirm={handleEditSeller}
+      />
     </div>
   );
 }

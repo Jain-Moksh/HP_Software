@@ -4,6 +4,7 @@ const jobberController = require('../controllers/jobberController');
 
 router.get('/', jobberController.getJobbers);
 router.post('/', jobberController.createJobber);
+router.put('/:id', jobberController.updateJobber);
 router.delete('/:id', jobberController.deleteJobber);
 
 module.exports = router;

@@ -17,7 +17,7 @@ exports.getJobReport = async (req, res) => {
         SELECT t.*, 'IN' as tx_type, s.name as seller 
         FROM transactions_in t
         LEFT JOIN sellers s ON t.seller_id = s.id
-        WHERE t.jobber_id = $1
+        WHERE t.jobber_id = $1 AND NOT COALESCE(t.a, FALSE)
     `, [jobberId]);
 
     // 3. Fetch OUT transactions
@@ -25,7 +25,7 @@ exports.getJobReport = async (req, res) => {
         SELECT t.*, 'OUT' as tx_type, v.name as vendor
         FROM transactions_out t
         LEFT JOIN vendors v ON t.vendor_id = v.id
-        WHERE t.jobber_id = $1
+        WHERE t.jobber_id = $1 AND NOT COALESCE(t.a, FALSE)
     `, [jobberId]);
 
     // 4. Fetch Adjustments (Payments/Deductions)
@@ -35,8 +35,30 @@ exports.getJobReport = async (req, res) => {
         WHERE jobber_id = $1
     `, [jobberId]);
 
+    // 4.1 Fetch Transfers IN (where jobber is receiver)
+    const transferInRes = await db.query(`
+        SELECT t.*, 'TRANSFER_IN' as tx_type, j.name as from_jobber
+        FROM material_transfers t
+        LEFT JOIN jobbers j ON t.from_jobber_id = j.id
+        WHERE t.to_jobber_id = $1
+    `, [jobberId]);
+
+    // 4.2 Fetch Transfers OUT (where jobber is sender)
+    const transferOutRes = await db.query(`
+        SELECT t.*, 'TRANSFER_OUT' as tx_type, j.name as to_jobber
+        FROM material_transfers t
+        LEFT JOIN jobbers j ON t.to_jobber_id = j.id
+        WHERE t.from_jobber_id = $1
+    `, [jobberId]);
+
     // 5. Combine and sort
-    const transactions = [...inRes.rows, ...outRes.rows, ...adjRes.rows].sort((a, b) => 
+    const transactions = [
+        ...inRes.rows, 
+        ...outRes.rows, 
+        ...adjRes.rows,
+        ...transferInRes.rows,
+        ...transferOutRes.rows
+    ].sort((a, b) => 
         new Date(b.created_at) - new Date(a.created_at)
     );
 
@@ -51,7 +73,17 @@ exports.getJobReport = async (req, res) => {
         totalInT2 += Number(tx.type2) || 0;
     });
 
+    transferInRes.rows.forEach(tx => {
+        totalInT1 += Number(tx.type1) || 0;
+        totalInT2 += Number(tx.type2) || 0;
+    });
+
     outRes.rows.forEach(tx => {
+        totalOutT1 += Number(tx.type1) || 0;
+        totalOutT2 += Number(tx.type2) || 0;
+    });
+
+    transferOutRes.rows.forEach(tx => {
         totalOutT1 += Number(tx.type1) || 0;
         totalOutT2 += Number(tx.type2) || 0;
     });

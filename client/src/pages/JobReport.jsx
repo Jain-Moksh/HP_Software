@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { ClipboardList, ChevronRight, Trash2 } from 'lucide-react';
+import { ClipboardList, ChevronRight, Trash2, Pencil } from 'lucide-react';
 import DeleteMasterModal from '../components/DeleteMasterModal';
+import EditMasterModal from '../components/EditMasterModal';
 import API_BASE_URL from '../config';
 
 export default function JobReport() {
@@ -16,6 +17,7 @@ export default function JobReport() {
   }, [setHeaderActions]);
 
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, jobberId: null, jobberName: '' });
+  const [editModal, setEditModal] = useState({ isOpen: false, jobberId: null, jobberName: '' });
 
   const fetchJobbers = async () => {
     try {
@@ -54,6 +56,27 @@ export default function JobReport() {
     }
   };
 
+  const handleEditJobber = async (newName) => {
+    try {
+      const resp = await fetch(`${API_BASE_URL}/jobbers/${editModal.jobberId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      
+      const data = await resp.json();
+      if (resp.ok) {
+        setEditModal({ isOpen: false, jobberId: null, jobberName: '' });
+        fetchJobbers(); // Refresh list
+      } else {
+        alert(data.error || 'Failed to rename jobber');
+      }
+    } catch (err) {
+      console.error('Edit error:', err);
+      alert('An error occurred while renaming');
+    }
+  };
+
   const handleViewReport = (jobber) => {
     navigate(`/job-report/${jobber.id}`);
   };
@@ -81,7 +104,7 @@ export default function JobReport() {
                 
                 <div className="flex flex-col h-full justify-between">
                   <div>
-                    <h3 className="text-lg font-bold text-[#0F172A] group-hover:text-[#2563EB] transition-colors pr-8">
+                    <h3 className="text-lg font-bold text-[#0F172A] group-hover:text-[#2563EB] transition-colors pr-16">
                       {jobber.name}
                     </h3>
                     <p className="text-xs text-[#64748B] mt-1 uppercase tracking-wider font-semibold">
@@ -98,17 +121,29 @@ export default function JobReport() {
                 </div>
               </button>
 
-              {/* Delete Button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteModal({ isOpen: true, jobberId: jobber.id, jobberName: jobber.name });
-                }}
-                className="absolute top-4 right-4 p-2 text-[#94A3B8] hover:text-[#EF4444] hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100 z-10"
-                title="Delete Jobber"
-              >
-                <Trash2 size={16} />
-              </button>
+              {/* Action Buttons */}
+              <div className="absolute top-4 right-4 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditModal({ isOpen: true, jobberId: jobber.id, jobberName: jobber.name });
+                  }}
+                  className="p-1.5 text-[#94A3B8] hover:text-[#2563EB] hover:bg-blue-50 rounded-lg transition-all"
+                  title="Rename Jobber"
+                >
+                  <Pencil size={16} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteModal({ isOpen: true, jobberId: jobber.id, jobberName: jobber.name });
+                  }}
+                  className="p-1.5 text-[#94A3B8] hover:text-[#EF4444] hover:bg-red-50 rounded-lg transition-all"
+                  title="Delete Jobber"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -120,6 +155,14 @@ export default function JobReport() {
         message={`This will permanently delete this jobber and all their material-in, material-out transactions and adjustments.`}
         onClose={() => setDeleteModal({ isOpen: false, jobberId: null, jobberName: '' })}
         onConfirm={handleDeleteJobber}
+      />
+
+      <EditMasterModal
+        isOpen={editModal.isOpen}
+        title={`Rename ${editModal.jobberName}`}
+        initialName={editModal.jobberName}
+        onClose={() => setEditModal({ isOpen: false, jobberId: null, jobberName: '' })}
+        onConfirm={handleEditJobber}
       />
     </div>
   );

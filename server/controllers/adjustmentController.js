@@ -43,6 +43,9 @@ exports.getAdjustmentsByJobber = async (req, res) => {
 exports.updateAdjustment = async (req, res) => {
     const { id } = req.params;
     const { amount, date, remark } = req.body;
+    if (amount === undefined || amount === null || !date) {
+        return res.status(400).json({ error: 'Amount and Date are required' });
+    }
     try {
         const result = await db.query(
             'UPDATE jobber_adjustments SET amount=$1, date=$2, remark=$3 WHERE id=$4 RETURNING *',

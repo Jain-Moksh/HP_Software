@@ -6,11 +6,13 @@ const jobberRoutes = require('./routes/jobberRoutes');
 const sellerRoutes = require('./routes/sellerRoutes');
 const vendorRoutes = require('./routes/vendorRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
+const transferRoutes = require('./routes/transferRoutes');
 const stockRoutes = require('./routes/stockRoutes');
 const jobReportRoutes = require('./routes/jobReportRoutes');
 const sellerReportRoutes = require('./routes/sellerReportRoutes');
 const adjustmentRoutes = require('./routes/adjustmentRoutes');
 const sellerAdjustmentRoutes = require('./routes/sellerAdjustmentRoutes');
+const utilityRoutes = require('./routes/utilityRoutes');
 
 const path = require('path');
 
@@ -20,6 +22,19 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Centralized automatic background backup hook
+const { triggerAutoBackupIfNeeded, ensureAutoBackupFileExists } = require('./controllers/utilityController');
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    if (['POST', 'PUT', 'DELETE'].includes(req.method) && 
+        res.statusCode >= 200 && res.statusCode < 300 && 
+        !req.path.startsWith('/api/utility')) {
+      triggerAutoBackupIfNeeded().catch(err => console.error('Background auto-backup trigger error:', err));
+    }
+  });
+  next();
+});
+
 // Serve static files from the React app
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
@@ -27,12 +42,14 @@ app.use(express.static(path.join(__dirname, '../client/dist')));
 app.use('/api/jobbers', jobberRoutes);
 app.use('/api/sellers', sellerRoutes);
 app.use('/api/vendors', vendorRoutes);
+app.use('/api/transactions/transfer', transferRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/stock', stockRoutes);
 app.use('/api/job-report', jobReportRoutes);
 app.use('/api/seller-report', sellerReportRoutes);
 app.use('/api/adjustments', adjustmentRoutes);
 app.use('/api/seller-adjustments', sellerAdjustmentRoutes);
+app.use('/api/utility', utilityRoutes);
 
 app.get('/api', (req, res) => {
     res.send('HP Accounting Backend Running');
@@ -63,6 +80,9 @@ app.listen(PORT, () => {
     const localIp = getLocalIp();
     const url = `http://${localIp}:${PORT}`;
     console.log(`Server is running on: ${url}`);
+    
+    // Verify or generate initial auto-backup file on server startup
+    ensureAutoBackupFileExists().catch(err => console.error('Failed to run initial startup auto-backup:', err));
     
     // Automatically open browser
     const start = (process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open');
