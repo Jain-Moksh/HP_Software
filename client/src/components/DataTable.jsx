@@ -24,23 +24,46 @@ const inputCls =
   'w-full bg-[#EFF6FF] border border-[#93C5FD] rounded px-1.5 py-0.5 text-xs text-[#0F172A] outline-none focus:ring-1 focus:ring-[#2563EB] placeholder:text-[#94A3B8]';
 
 // ─── helper components (outside to prevent remounting) ───────────────────────
-const ViewText = ({ value, type }) => (
-  <span className="block truncate text-center" title={value}>
+const ViewText = ({ value, type, field }) => (
+  <span 
+    className={`block text-center ${field === 'remark' ? 'whitespace-pre-wrap break-words' : 'truncate'}`} 
+    title={value}
+  >
     {type === 'date' ? formatDate(value) : value}
   </span>
 );
 
-const EditText = ({ field, value, onChange, onKeyDown, cls = '', autoFocus = false }) => (
-  <input
-    type="text"
-    value={value}
-    onChange={e => onChange(field, e.target.value)}
-    onKeyDown={onKeyDown}
-    className={`${inputCls} text-center ${cls}`}
-    onClick={e => e.stopPropagation()}
-    autoFocus={autoFocus}
-  />
-);
+const EditText = ({ field, value, onChange, onKeyDown, cls = '', autoFocus = false }) => {
+  if (field === 'remark') {
+    return (
+      <textarea
+        value={value}
+        onChange={e => onChange(field, e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            onKeyDown(e);
+          }
+        }}
+        className={`${inputCls} text-center ${cls} resize-y min-h-[32px]`}
+        onClick={e => e.stopPropagation()}
+        autoFocus={autoFocus}
+        rows={1}
+      />
+    );
+  }
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={e => onChange(field, e.target.value)}
+      onKeyDown={onKeyDown}
+      className={`${inputCls} text-center ${cls}`}
+      onClick={e => e.stopPropagation()}
+      autoFocus={autoFocus}
+    />
+  );
+};
 
 const EditNum = ({ field, value, onChange, onKeyDown, cls = '', disabled = false }) => (
   <input
@@ -496,7 +519,7 @@ export default function DataTable({
           <td key={col.key} className={`px-3 py-1.5 border-r border-[#E2E8F0] font-mono text-xs text-[#64748B] text-center w-[100px] whitespace-nowrap`} style={col.minWidth ? { minWidth: col.minWidth } : { minWidth: '100px' }}>
             {isEditing
               ? <DateField field={col.key} value={draft[col.key]} onChange={setField} onKeyDown={handleKeyDown} />
-              : <ViewText value={formatDate(row[col.key])} />}
+              : <ViewText value={formatDate(row[col.key])} field={col.key} />}
           </td>
         );
 
@@ -514,7 +537,7 @@ export default function DataTable({
               : <ViewText value={
                   (value === '---') ? '---' : 
                   (col.prefix ? `${col.prefix}${value}` : value)
-                } type={col.type} />}
+                } type={col.type} field={col.key} />}
           </td>
         );
 
@@ -530,7 +553,7 @@ export default function DataTable({
                     : col.prefix 
                       ? `${col.prefix}${Number(value).toLocaleString()}` 
                       : Number(value).toLocaleString()
-                } />}
+                } field={col.key} />}
           </td>
         );
 
@@ -548,18 +571,23 @@ export default function DataTable({
                 onKeyDown={handleKeyDown}
               />
             ) : (
-              <ViewText value={row[col.key]} />
+              <ViewText value={row[col.key]} field={col.key} />
             )}
           </td>
         );
 
       case 'text':
       default:
+        const isRemark = col.key === 'remark';
         return (
-          <td key={col.key} className="px-3 py-1.5 border-r border-[#E2E8F0] font-medium text-center text-[#0F172A] max-w-[150px]" style={col.minWidth ? { minWidth: col.minWidth } : { minWidth: '140px' }}>
+          <td 
+            key={col.key} 
+            className={`px-3 py-1.5 border-r border-[#E2E8F0] font-medium text-center text-[#0F172A] ${isRemark ? 'max-w-[250px]' : 'max-w-[150px]'}`} 
+            style={col.minWidth ? { minWidth: col.minWidth } : { minWidth: '140px' }}
+          >
             {isEditing
               ? <EditText field={col.key} value={draft[col.key]} onChange={setField} onKeyDown={handleKeyDown} autoFocus={col.autoFocus} />
-              : <ViewText value={row[col.key]} />}
+              : <ViewText value={row[col.key]} field={col.key} />}
           </td>
         );
     }

@@ -367,6 +367,14 @@ export default function MaterialIn() {
                             onChange={handleInputChange}
                             onKeyDown={() => {}}
                           />
+                        ) : col.key === 'remark' ? (
+                          <textarea
+                            value={newRow[col.key]}
+                            onChange={(e) => handleInputChange(col.key, e.target.value)}
+                            placeholder={col.label}
+                            rows={1}
+                            className="w-full bg-[#F1F5F9] border border-[#CBD5E1] rounded px-2 py-1.5 text-xs text-[#0F172A] outline-none focus:ring-1 focus:ring-[#2563EB] transition-all text-center resize-y min-h-[30px]"
+                          />
                         ) : (
                           <input
                             type={col.type === 'number' ? 'number' : 'text'}
