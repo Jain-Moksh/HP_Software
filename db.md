@@ -46,7 +46,7 @@ Records material flowing from **Sellers** to **Jobbers**.
 | `material` | VARCHAR(255) | Description of the material |
 | `rate` | NUMERIC | Price per unit |
 | `amount` | NUMERIC | Computed total: `(type1 + type2) * rate` (+18% if `b` is true) |
-| `date` | DATE | Transaction date |
+| `date` | DATE | Transaction date (NOT NULL) |
 | `remark` | TEXT | Optional notes |
 | `w`, `b`, `a` | BOOLEAN | Category flags (e.g., 'b' indicates 18% GST calculation) |
 | `created_at` | TIMESTAMP | Creation timestamp |
@@ -61,7 +61,7 @@ Records material flowing from **Jobbers** to **Vendors**.
 | `type1`, `type2` | NUMERIC | Quantities |
 | `material` | VARCHAR(255) | Description |
 | `rate`, `amount` | NUMERIC | Price and Total |
-| `date` | DATE | Transaction date |
+| `date` | DATE | Transaction date (NOT NULL) |
 | `remark` | TEXT | Optional notes |
 | `w`, `b`, `a` | BOOLEAN | Category flags |
 | `created_at` | TIMESTAMP | Creation timestamp |
@@ -74,8 +74,8 @@ Records internal physical stock transfers from a sender **Jobber** to a receiver
 | `from_jobber_id` | INTEGER | FK → `jobbers.id` (ON DELETE CASCADE, sender) |
 | `to_jobber_id` | INTEGER | FK → `jobbers.id` (ON DELETE CASCADE, receiver) |
 | `type1`, `type2` | NUMERIC | Quantities |
-| `material` | VARCHAR(255) | Description |
-| `date` | DATE | Transfer date |
+| `material` | VARCHAR(255) | Description (NOT NULL) |
+| `date` | DATE | Transfer date (NOT NULL) |
 | `remark` | TEXT | Optional notes |
 | `created_at` | TIMESTAMP | Creation timestamp |
 
@@ -129,3 +129,4 @@ To ensure fast reporting and filtering, the following indexes are implemented:
   - Deleting a **Seller** automatically deletes all their `transactions_in` and `seller_adjustments`.
 - **Decimal Precision**: All currency and quantity fields use `NUMERIC` for exact precision. Rates and Amounts are often rounded to 0 or 2 decimal places in reports.
 - **Mutual Exclusion**: For material entries, `type1` and `type2` are mutually exclusive; only one can have a non-zero value per entry.
+- **Transfer Jobber Constraint**: For material transfers, the sender jobber (`from_jobber_id`) and receiver jobber (`to_jobber_id`) must be different.

@@ -26,6 +26,9 @@ HP Accounting Software is a specialized inventory and financial management syste
   - `DataTable.jsx`: Reusable table with inline editing, computed fields, and deletion support.
   - `DateField.jsx`: Specialized date input with shortcut support.
   - `DeleteMasterModal.jsx`: Modal for confirmation of deleting jobbers/sellers.
+  - `EditMasterModal.jsx`: Modal for renaming master records (Jobbers/Sellers).
+  - `Header.jsx`: Top navigation and page action toolbar container.
+  - `Sidebar.jsx`: Sidebar navigation menu with visual highlights.
   - `MainLayout.jsx`: Master layout with a persistent sidebar and dynamic header.
 
 ### Backend
@@ -42,7 +45,7 @@ HP Accounting Software is a specialized inventory and financial management syste
 HP_Accounting_Software/
 ├── client/                 # React Frontend
 │   ├── src/
-│   │   ├── components/     # UI Components (DataTable, Header, Sidebar, DateField, DeleteMasterModal)
+│   │   ├── components/     # UI Components (DataTable, DateField, DeleteMasterModal, EditMasterModal, Header, Sidebar)
 │   │   ├── constants/      # App Constants & Configurations (pageConfig.js)
 │   │   ├── layouts/        # Page Layouts (MainLayout with dynamic Header)
 │   │   ├── pages/          # Application Views
