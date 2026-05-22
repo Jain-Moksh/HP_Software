@@ -414,7 +414,6 @@ export default function DataTable({
         saved[col.key] = Number(saved[col.key]) || 0;
       }
     });
-    if (calculateFields) saved = calculateFields(saved);
     setRows(prev => prev.map(r => r.id === saved.id ? saved : r));
     if (onSave) {
       onSave(saved);

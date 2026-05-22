@@ -34,7 +34,8 @@ const COLUMNS = [
 ];
 
 // ─── calculation helper ──────────────────────────────────────────────────────
-const calculateAmount = (row) => {
+const calculateAmount = (row, field) => {
+  if (field === 'amount') return row;
   const t1 = Number(row.type1) || 0;
   const t2 = Number(row.type2) || 0;
   const r  = Number(row.rate)  || 0;
@@ -360,8 +361,14 @@ export default function MaterialIn() {
                             />
                           </div>
                         ) : col.type === 'computed' ? (
-                          <div className="text-center font-mono font-bold text-[#0F172A]">
-                             {col.prefix}{newRow[col.key]?.toLocaleString()}
+                          <div className="flex justify-center relative">
+                            {col.prefix && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[#64748B] text-xs font-bold">{col.prefix}</span>}
+                            <input
+                              type="number"
+                              value={newRow[col.key] || ''}
+                              onChange={(e) => handleInputChange(col.key, e.target.value)}
+                              className={`w-full bg-[#F1F5F9] border border-[#CBD5E1] rounded px-2 py-1.5 text-xs text-[#0F172A] outline-none focus:ring-1 focus:ring-[#2563EB] transition-all text-center font-mono font-bold ${col.prefix ? 'pl-5' : ''}`}
+                            />
                           </div>
                         ) : col.type === 'date' ? (
                           <DateField
