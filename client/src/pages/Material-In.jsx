@@ -330,7 +330,7 @@ export default function MaterialIn() {
                 <thead>
                   <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
                     {COLUMNS.map(col => (
-                      <th key={col.key} className="px-3 py-2 text-center text-[10px] font-bold text-[#64748B] uppercase tracking-wider border-r border-[#E2E8F0] last:border-r-0">
+                      <th key={col.key} className="px-3 py-2 text-center text-[10px] font-bold text-[#64748B] uppercase tracking-wider border-r border-[#E2E8F0] last:border-r-0" style={{ minWidth: col.minWidth || '100px' }}>
                         {col.label}
                       </th>
                     ))}
@@ -339,7 +339,7 @@ export default function MaterialIn() {
                 <tbody>
                   <tr>
                     {COLUMNS.map(col => (
-                      <td key={col.key} className="px-2 py-3 border-r border-[#E2E8F0] last:border-r-0">
+                      <td key={col.key} className="px-2 py-3 border-r border-[#E2E8F0] last:border-r-0" style={{ minWidth: col.minWidth || '100px' }}>
                         {col.type === 'checkbox' ? (
                           <div className="flex justify-center">
                             <input

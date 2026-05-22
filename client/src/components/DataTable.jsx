@@ -528,7 +528,7 @@ export default function DataTable({
 
       case 'number':
         return (
-          <td key={col.key} className="px-3 py-1.5 border-r border-[#E2E8F0] font-mono text-center text-[#0F172A]" style={col.minWidth ? { minWidth: col.minWidth } : { maxWidth: '80px' }}>
+          <td key={col.key} className="px-3 py-1.5 border-r border-[#E2E8F0] font-mono text-center text-[#0F172A]" style={col.minWidth ? { minWidth: col.minWidth } : { minWidth: '100px' }}>
             {isEditing
               ? <EditNum 
                   field={col.key} 
@@ -545,7 +545,7 @@ export default function DataTable({
 
       case 'computed':
         return (
-          <td key={col.key} className="px-3 py-1.5 border-r border-[#E2E8F0] font-mono font-semibold text-center text-[#0F172A]" style={col.minWidth ? { minWidth: col.minWidth } : { maxWidth: '100px' }}>
+          <td key={col.key} className="px-3 py-1.5 border-r border-[#E2E8F0] font-mono font-semibold text-center text-[#0F172A]" style={col.minWidth ? { minWidth: col.minWidth } : { minWidth: '120px' }}>
             {isEditing
               ? <EditNum field={col.key} value={draft[col.key]} onChange={setField} onKeyDown={handleKeyDown} />
               : <ViewText value={
@@ -580,7 +580,7 @@ export default function DataTable({
 
       case 'stacked-number':
         return (
-          <td key={col.key} className="px-3 py-1.5 border-r border-[#E2E8F0] font-mono text-center text-[#0F172A]" style={col.minWidth ? { minWidth: col.minWidth } : { maxWidth: '80px' }}>
+          <td key={col.key} className="px-3 py-1.5 border-r border-[#E2E8F0] font-mono text-center text-[#0F172A]" style={col.minWidth ? { minWidth: col.minWidth } : { minWidth: '100px' }}>
             {isEditing ? (
               <div className="flex flex-col gap-1.5">
                 <EditNum 
