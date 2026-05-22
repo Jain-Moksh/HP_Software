@@ -12,13 +12,26 @@ const pool = new Pool({
 
 async function migrate() {
   try {
-    console.log('Starting migration: Adding remark columns...');
+    console.log('Starting migration...');
     
     await pool.query('ALTER TABLE transactions_in ADD COLUMN IF NOT EXISTS remark TEXT;');
     console.log('✅ Added remark to transactions_in');
     
     await pool.query('ALTER TABLE transactions_out ADD COLUMN IF NOT EXISTS remark TEXT;');
     console.log('✅ Added remark to transactions_out');
+
+    // Add opening balances to jobbers
+    await pool.query('ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_stock_type1 NUMERIC DEFAULT 0;');
+    await pool.query('ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_stock_type2 NUMERIC DEFAULT 0;');
+    await pool.query('ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_amount NUMERIC DEFAULT 0;');
+    console.log('✅ Added opening balances to jobbers');
+
+    // Add piece count columns to transactions_out
+    await pool.query('ALTER TABLE transactions_out ADD COLUMN IF NOT EXISTS type1_b NUMERIC DEFAULT 0;');
+    console.log('✅ Added type1_b (pieces) to transactions_out');
+
+    await pool.query('ALTER TABLE transactions_out ADD COLUMN IF NOT EXISTS type2_b NUMERIC DEFAULT 0;');
+    console.log('✅ Added type2_b (pieces) to transactions_out');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS jobber_adjustments (

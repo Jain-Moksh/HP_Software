@@ -65,13 +65,13 @@ exports.deleteJobber = async (req, res) => {
 // PUT /api/jobbers/:id
 exports.updateJobber = async (req, res) => {
     const { id } = req.params;
-    const { name } = req.body;
+    const { name, opening_stock_type1, opening_stock_type2, opening_amount } = req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
 
     try {
         const result = await db.query(
-            'UPDATE jobbers SET name = $1 WHERE id = $2 RETURNING *',
-            [toTitleCase(name), id]
+            'UPDATE jobbers SET name = $1, opening_stock_type1 = COALESCE($2, opening_stock_type1), opening_stock_type2 = COALESCE($3, opening_stock_type2), opening_amount = COALESCE($4, opening_amount) WHERE id = $5 RETURNING *',
+            [toTitleCase(name), opening_stock_type1, opening_stock_type2, opening_amount, id]
         );
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Jobber not found' });

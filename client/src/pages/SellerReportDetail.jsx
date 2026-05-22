@@ -63,7 +63,7 @@ const prepareTableData = (data, month, year, showDraftAdj = false) => {
       id: 'draft-adj',
       isDraft: true,
       tx_type: 'IN_ADJ',
-      date: '',
+      date: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`,
       amount: 0,
       remark: 'Adjustment',
       type1: '---', type2: '---', material: '---', rate: '---',

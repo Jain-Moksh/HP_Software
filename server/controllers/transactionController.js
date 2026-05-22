@@ -87,7 +87,7 @@ exports.createTransactionIn = async (req, res) => {
 // ─── POST /api/transactions/out ─────────────────────────────────────────────
 exports.createTransactionOut = async (req, res) => {
     const { 
-        jobber_id, vendor_id, type1, type2, material, 
+        jobber_id, vendor_id, type1, type2, type1_b, type2_b, material, 
         rate, amount, date, remark, w, b, a 
     } = req.body;
 
@@ -101,13 +101,14 @@ exports.createTransactionOut = async (req, res) => {
 
         const query = `
             INSERT INTO transactions_out
-            (jobber_id, vendor_id, type1, type2, material, rate, amount, date, remark, w, b, a)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            (jobber_id, vendor_id, type1, type2, type1_b, type2_b, material, rate, amount, date, remark, w, b, a)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING *
         `;
         const values = [
-            jobber_id, vendor_id, type1 || 0, type2 || 0, toTitleCase(material), 
-            rate || 0, amount || 0, date, toTitleCase(remark), w || false, b || false, a || false
+            jobber_id, vendor_id, type1 || 0, type2 || 0, type1_b || 0, type2_b || 0,
+            toTitleCase(material), rate || 0, amount || 0, date,
+            toTitleCase(remark), w || false, b || false, a || false
         ];
 
         const result = await db.query(query, values);
@@ -213,16 +214,18 @@ exports.deleteTransactionIn = async (req, res) => {
     }
 };
 
-// ─── UPDATE /api/transactions/out/:id ──────────────────────────────────────
+// ─── UPDATE /api/transactions/out/:id ───────────────────────────────────────
 exports.updateTransactionOut = async (req, res) => {
     const { id } = req.params;
-    const { jobber_id, vendor_id, type1, type2, material, rate, amount, date, remark, w, b, a } = req.body;
+    const { jobber_id, vendor_id, type1, type2, type1_b, type2_b, material, rate, amount, date, remark, w, b, a } = req.body;
     try {
         const result = await db.query(`
             UPDATE transactions_out 
-            SET jobber_id=$1, vendor_id=$2, type1=$3, type2=$4, material=$5, rate=$6, amount=$7, date=$8, remark=$9, w=$10, b=$11, a=$12
-            WHERE id=$13 RETURNING *
-        `, [jobber_id, vendor_id, type1, type2, toTitleCase(material), rate, amount, date, toTitleCase(remark), w, b, a, id]);
+            SET jobber_id=$1, vendor_id=$2, type1=$3, type2=$4, type1_b=$5, type2_b=$6,
+                material=$7, rate=$8, amount=$9, date=$10, remark=$11, w=$12, b=$13, a=$14
+            WHERE id=$15 RETURNING *
+        `, [jobber_id, vendor_id, type1, type2, type1_b || 0, type2_b || 0,
+            toTitleCase(material), rate, amount, date, toTitleCase(remark), w, b, a, id]);
         
         if (result.rows.length === 0) return res.status(404).json({ error: 'Transaction not found' });
         res.json(result.rows[0]);

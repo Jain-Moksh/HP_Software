@@ -39,14 +39,17 @@ const TOOLBAR_ICONS = [
   { id: 'download',   icon: Download,    label: 'Download'    },
 ];
 
-const INITIAL_ROW = {
-  type1: '',
-  type2: '',
-  material: '',
-  from_jobber: '',
-  to_jobber: '',
-  date: '',
-  remark: ''
+const getInitialRow = () => {
+  const d = new Date();
+  return {
+    type1: '',
+    type2: '',
+    material: '',
+    from_jobber: '',
+    to_jobber: '',
+    date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+    remark: ''
+  };
 };
 
 export default function MaterialTransfer() {
@@ -56,7 +59,7 @@ export default function MaterialTransfer() {
 
   const [masters, setMasters] = useState({ jobbers: [] });
   const [searchFilters, setSearchFilters] = useState({ from_jobber: '', to_jobber: '', material: '' });
-  const [newRow, setNewRow] = useState(INITIAL_ROW);
+  const [newRow, setNewRow] = useState(getInitialRow());
   const [loading, setLoading] = useState(true);
 
   const filteredData = useMemo(() => {
@@ -217,7 +220,7 @@ export default function MaterialTransfer() {
       });
 
       if (resp.ok) {
-        setNewRow(INITIAL_ROW);
+        setNewRow(getInitialRow());
         fetchData();
       } else {
         const error = await resp.json();
@@ -285,10 +288,10 @@ export default function MaterialTransfer() {
     }
   };
 
-  const handleRedo = () => setNewRow(INITIAL_ROW);
+  const handleRedo = () => setNewRow(getInitialRow());
   const handleCancel = () => {
     setShowEntryRow(false);
-    setNewRow(INITIAL_ROW);
+    setNewRow(getInitialRow());
   };
 
   return (

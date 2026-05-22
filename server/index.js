@@ -5,6 +5,7 @@ require('dotenv').config();
 const jobberRoutes = require('./routes/jobberRoutes');
 const sellerRoutes = require('./routes/sellerRoutes');
 const vendorRoutes = require('./routes/vendorRoutes');
+const itemRoutes = require('./routes/itemRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const transferRoutes = require('./routes/transferRoutes');
 const stockRoutes = require('./routes/stockRoutes');
@@ -24,6 +25,13 @@ app.use(express.json());
 
 // Centralized automatic background backup hook
 const { triggerAutoBackupIfNeeded, ensureAutoBackupFileExists } = require('./controllers/utilityController');
+
+// Run auto migrations
+const db = require('./config/db');
+db.query('ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_stock_type1 NUMERIC DEFAULT 0;').catch(()=>console.log('Migrate failed'));
+db.query('ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_stock_type2 NUMERIC DEFAULT 0;').catch(()=>console.log('Migrate failed'));
+db.query('ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_amount NUMERIC DEFAULT 0;').catch(()=>console.log('Migrate failed'));
+
 app.use((req, res, next) => {
   res.on('finish', () => {
     if (['POST', 'PUT', 'DELETE'].includes(req.method) && 
@@ -42,6 +50,7 @@ app.use(express.static(path.join(__dirname, '../client/dist')));
 app.use('/api/jobbers', jobberRoutes);
 app.use('/api/sellers', sellerRoutes);
 app.use('/api/vendors', vendorRoutes);
+app.use('/api/items', itemRoutes);
 app.use('/api/transactions/transfer', transferRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/stock', stockRoutes);

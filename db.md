@@ -30,6 +30,19 @@ Stores information about material recipients.
 | `name` | VARCHAR(255) | Unique name of the vendor (Title Case) |
 | `created_at` | TIMESTAMP | Creation timestamp |
 
+### `items`
+Stores information about items managed in the Item Master.
+| Column | Type | Description |
+|---|---|---|
+| `id` | SERIAL | Primary Key |
+| `item_name` | VARCHAR(255) | Unique name of the item (Title Case) |
+| `description` | TEXT | Optional description |
+| `job_rate` | NUMERIC | Job rate (price) |
+| `weight_type1` | NUMERIC | Weight parameter for Type 1 |
+| `weight_type2` | NUMERIC | Weight parameter for Type 2 |
+| `created_at` | TIMESTAMP | Creation timestamp |
+| `updated_at` | TIMESTAMP | Last update timestamp |
+
 ---
 
 ## 📊 Transaction Tables

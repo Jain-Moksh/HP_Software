@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Pencil, Save, Trash2 } from 'lucide-react';
 import DateField from './DateField';
@@ -65,18 +65,18 @@ const EditText = ({ field, value, onChange, onKeyDown, cls = '', autoFocus = fal
   );
 };
 
-const EditNum = ({ field, value, onChange, onKeyDown, cls = '', disabled = false }) => (
+const EditNum = ({ field, value, onChange, onKeyDown, cls = '', disabled = false, placeholder = '' }) => (
   <input
     type="number"
     value={value}
     onChange={e => onChange(field, e.target.value)}
     onKeyDown={onKeyDown}
     disabled={disabled}
+    placeholder={placeholder}
     className={`${inputCls} text-center ${cls} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     onClick={e => e.stopPropagation()}
   />
 );
-
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm }) => {
   const [password, setPassword] = useState('');
@@ -308,13 +308,21 @@ export default function DataTable({
   onSave,
   onDelete,
   onAddNewOption, // New prop
-  comboboxFields = {},
+  comboboxFields: comboboxFieldsProp,
   calculateFields,
   checkboxRecalcFields = [],
   hideFilters = false, // If true, suppresses internal month/year pagination
 }) {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
+
+  // Stabilize comboboxFields reference — a plain {} default would be a new
+  // object on every render, causing the comboOptions useEffect to loop.
+  const comboboxFields = useMemo(
+    () => comboboxFieldsProp || {},
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(comboboxFieldsProp)]
+  );
 
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [activeMonth, setActiveMonth]   = useState(currentMonth);
@@ -383,7 +391,7 @@ export default function DataTable({
     } else {
       let updatedRow = { ...row, [field]: !row[field] };
       if (calculateFields && checkboxRecalcFields.includes(field)) {
-        updatedRow = calculateFields(updatedRow);
+        updatedRow = calculateFields(updatedRow, field);
       }
       setRows(prev => prev.map(r => r.id === row.id ? updatedRow : r));
       saveRow(updatedRow);
@@ -454,15 +462,11 @@ export default function DataTable({
     setDraft(prev => {
       let next = { ...prev, [field]: value };
 
-      // Mutual exclusion logic for type1 and type2
-      if (field === 'type1' && value !== '') {
-        next.type2 = '';
-      } else if (field === 'type2' && value !== '') {
-        next.type1 = '';
-      }
+      // Mutual exclusion logic for type1 and type2 removed to allow both
+      
 
       if (calculateFields) {
-        const recalced = calculateFields(next);
+        const recalced = calculateFields(next, field);
         return recalced;
       }
       return next;
@@ -532,7 +536,6 @@ export default function DataTable({
                   value={draft[col.key]} 
                   onChange={setField} 
                   onKeyDown={handleKeyDown} 
-                  disabled={(col.key === 'type1' && Number(draft.type2) > 0) || (col.key === 'type2' && Number(draft.type1) > 0)}
                 />
               : <ViewText value={
                   (value === '---') ? '---' : 
@@ -572,6 +575,46 @@ export default function DataTable({
               />
             ) : (
               <ViewText value={row[col.key]} field={col.key} />
+            )}
+          </td>
+        );
+
+      case 'stacked-number':
+        return (
+          <td key={col.key} className="px-3 py-1.5 border-r border-[#E2E8F0] font-mono text-center text-[#0F172A]" style={col.minWidth ? { minWidth: col.minWidth } : { maxWidth: '80px' }}>
+            {isEditing ? (
+              <div className="flex flex-col gap-1.5">
+                <EditNum 
+                  field={col.key} 
+                  value={draft[col.key]} 
+                  onChange={setField} 
+                  onKeyDown={handleKeyDown} 
+                  cls="placeholder:text-gray-400 placeholder:text-[10px]"
+                  placeholder="kg"
+                />
+                {col.subKey && (
+                  <EditNum 
+                    field={col.subKey} 
+                    value={draft[col.subKey]} 
+                    onChange={setField} 
+                    onKeyDown={handleKeyDown} 
+                    cls="placeholder:text-gray-400 placeholder:text-[10px]"
+                    placeholder="pcs"
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1 items-center justify-center">
+                <ViewText value={
+                  (row[col.key] === '---') ? '---' : 
+                  (col.prefix ? `${col.prefix}${row[col.key]}` : (Number(row[col.key]) ? `${row[col.key]}kg` : ''))
+                } field={col.key} />
+                {col.subKey && Number(row[col.subKey]) > 0 && (
+                  <div className="text-[10px] text-[#64748B] font-bold">
+                    {row[col.subKey]}pcs
+                  </div>
+                )}
+              </div>
             )}
           </td>
         );

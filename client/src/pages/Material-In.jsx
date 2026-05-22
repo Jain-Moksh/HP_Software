@@ -54,19 +54,22 @@ const TOOLBAR_ICONS = [
   { id: 'download',   icon: Download,    label: 'Download'    },
 ];
 
-const INITIAL_ROW = {
-  type1: '',
-  type2: '',
-  material: '',
-  rate: '',
-  seller: '',
-  jobber: '',
-  date: '',
-  remark: '',
-  w: false,
-  b: false,
-  a: false,
-  amount: 0
+const getInitialRow = () => {
+  const d = new Date();
+  return {
+    type1: '',
+    type2: '',
+    material: '',
+    rate: '',
+    seller: '',
+    jobber: '',
+    date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+    remark: '',
+    w: false,
+    b: false,
+    a: false,
+    amount: 0
+  };
 };
 
 export default function MaterialIn() {
@@ -76,7 +79,7 @@ export default function MaterialIn() {
 
   const [masters, setMasters] = useState({ sellers: [], jobbers: [] });
   const [searchFilters, setSearchFilters] = useState({ seller: '', jobber: '', material: '' });
-  const [newRow, setNewRow] = useState(INITIAL_ROW);
+  const [newRow, setNewRow] = useState(getInitialRow());
   const [loading, setLoading] = useState(true);
 
   const filteredData = useMemo(() => {
@@ -242,7 +245,7 @@ export default function MaterialIn() {
 
       if (resp.ok) {
         // setShowEntryRow(false); // Persistent entry row
-        setNewRow(INITIAL_ROW);
+        setNewRow(getInitialRow());
         fetchData();
       }
  else {
@@ -304,10 +307,10 @@ export default function MaterialIn() {
     }
   };
 
-  const handleRedo = () => setNewRow(INITIAL_ROW);
+  const handleRedo = () => setNewRow(getInitialRow());
   const handleCancel = () => {
     setShowEntryRow(false);
-    setNewRow(INITIAL_ROW);
+    setNewRow(getInitialRow());
   };
 
   return (

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Package, PackageOpen, ClipboardList, Menu, ChevronRight, RefreshCw, Settings } from 'lucide-react';
+import { Package, PackageOpen, ClipboardList, Menu, ChevronRight, RefreshCw, Settings, Boxes } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'materials', label: 'Material-In', icon: Package, path: '/material-in' },
   { id: 'material-transfer', label: 'Material Transfer', icon: RefreshCw, path: '/material-transfer' },
   { id: 'material-out', label: 'Material-Out', icon: PackageOpen, path: '/material-out' },
+  { id: 'item-master', label: 'Item Master', icon: Boxes, path: '/item-master' },
   { id: 'job-report', label: 'Job Report', icon: ClipboardList, path: '/job-report' },
   { id: 'seller-report', label: 'Seller Report', icon: ClipboardList, path: '/seller-report' },
 ];

@@ -18,9 +18,9 @@ import API_BASE_URL from '../config';
 
 // ─── Material-Out column definitions ─────────────────────────────────────────
 const COLUMNS = [
-  { key: 'type1',    label: 'Type 1',    type: 'number' },
-  { key: 'type2',    label: 'Type 2',    type: 'number' },
-  { key: 'material', label: 'Material',  type: 'text', autoFocus: true, minWidth: '140px' },
+  { key: 'type1',    label: 'Type 1',    type: 'stacked-number', subKey: 'type1_b' },
+  { key: 'type2',    label: 'Type 2',    type: 'stacked-number', subKey: 'type2_b' },
+  { key: 'material', label: 'Material',  type: 'combobox', autoFocus: true, minWidth: '140px' },
   { key: 'rate',     label: 'Rate',      type: 'number', prefix: '₹' },
   { key: 'jobber',   label: 'Jobber',    type: 'combobox', minWidth: '120px' },
   { key: 'vendor',   label: 'Vendor',    type: 'combobox', minWidth: '120px' },
@@ -30,25 +30,66 @@ const COLUMNS = [
 ];
 
 // ─── calculation helper ──────────────────────────────────────────────────────
-const calculateAmount = (row) => {
-  const t1 = Number(row.type1) || 0;
-  const t2 = Number(row.type2) || 0;
-  const r  = Number(row.rate)  || 0;
-  let total = (t1 + t2) * r;
-  if (row.b) total = total + 0.18 * total;
-  return { ...row, amount: Math.round(total) };
+const calculateAmount = (row, items = [], fieldChanged = null) => {
+  let updated = { ...row };
+
+  if (fieldChanged === 'type1_b' || fieldChanged === 'type2_b' || fieldChanged === 'material') {
+    const matchedItem = (items || []).find(
+      i => i.item_name.toLowerCase() === (updated.material || '').toLowerCase()
+    );
+    if (matchedItem) {
+      if (fieldChanged === 'type1_b' || (fieldChanged === 'material' && updated.type1_b)) {
+        if (updated.type1_b) {
+          updated.type1 = (Number(updated.type1_b) * (Number(matchedItem.weight_type1) || 0)).toFixed(3).replace(/\.?0+$/, '');
+        } else {
+          updated.type1 = '';
+        }
+      }
+      if (fieldChanged === 'type2_b' || (fieldChanged === 'material' && updated.type2_b)) {
+        if (updated.type2_b) {
+          updated.type2 = (Number(updated.type2_b) * (Number(matchedItem.weight_type2) || 0)).toFixed(3).replace(/\.?0+$/, '');
+        } else {
+          updated.type2 = '';
+        }
+      }
+    }
+  }
+
+  const t1_kg = Number(updated.type1) || 0;
+  const t1_pcs = Number(updated.type1_b) || 0;
+  const t2_kg = Number(updated.type2) || 0;
+  const t2_pcs = Number(updated.type2_b) || 0;
+
+  const totalPcs = t1_pcs + t2_pcs;
+  const totalKg = t1_kg + t2_kg;
+  const r  = Number(updated.rate)  || 0;
+  
+  let total = 0;
+  if (totalPcs > 0) {
+    total = totalPcs * r;
+  } else if (totalKg > 0) {
+    total = totalKg * r;
+  }
+
+  if (updated.b) total = total + 0.18 * total;
+  return { ...updated, amount: Math.round(total) };
 };
 
-const INITIAL_ROW = {
-  type1: '',
-  type2: '',
-  material: '',
-  rate: '',
-  jobber: '',
-  vendor: '',
-  date: '',
-  remark: '',
-  amount: 0
+const getInitialRow = () => {
+  const d = new Date();
+  return {
+    type1: '',
+    type1_b: '',
+    type2: '',
+    type2_b: '',
+    material: '',
+    rate: '',
+    jobber: '',
+    vendor: '',
+    date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+    remark: '',
+    amount: 0
+  };
 };
 
 const TOOLBAR_ICONS = [
@@ -66,8 +107,8 @@ export default function MaterialOut() {
   const [data, setData] = useState([]);
   const [showEntryRow, setShowEntryRow] = useState(false);
 
-  const [masters, setMasters] = useState({ vendors: [], jobbers: [] });
-  const [newRow, setNewRow] = useState(INITIAL_ROW);
+  const [masters, setMasters] = useState({ vendors: [], jobbers: [], items: [] });
+  const [newRow, setNewRow] = useState(getInitialRow());
   const [loading, setLoading] = useState(true);
 
   // Fetch initial data
@@ -94,12 +135,13 @@ export default function MaterialOut() {
 
   const fetchMasters = useCallback(async () => {
     try {
-      const [vRes, jRes] = await Promise.all([
+      const [vRes, jRes, iRes] = await Promise.all([
         fetch(`${API_BASE_URL}/vendors`),
-        fetch(`${API_BASE_URL}/jobbers`)
+        fetch(`${API_BASE_URL}/jobbers`),
+        fetch(`${API_BASE_URL}/items`)
       ]);
-      const [vendors, jobbers] = await Promise.all([vRes.json(), jRes.json()]);
-      setMasters({ vendors, jobbers });
+      const [vendors, jobbers, items] = await Promise.all([vRes.json(), jRes.json(), iRes.json()]);
+      setMasters({ vendors, jobbers, items });
     } catch (err) {
       console.error('Master fetch error:', err);
     }
@@ -139,7 +181,14 @@ export default function MaterialOut() {
   };
 
   const handleAddNewOption = async (field, value) => {
-    await ensureMasterRecord(field, value);
+    if (field === 'material') {
+      setMasters(prev => ({
+        ...prev,
+        items: [...(prev.items || []), { item_name: value, weight_type1: 0, weight_type2: 0 }]
+      }));
+    } else {
+      await ensureMasterRecord(field, value);
+    }
   };
 
   const handleToolbarClick = useCallback((id) => {
@@ -173,22 +222,34 @@ export default function MaterialOut() {
 
   const handleInputChange = (field, value) => {
     let updatedRow = { ...newRow, [field]: value };
-    
-    if (field === 'type1' && value !== '') {
-      updatedRow.type2 = '';
-    } else if (field === 'type2' && value !== '') {
-      updatedRow.type1 = '';
+
+    // Auto-fill rate from item master's job_rate when material is selected
+    if (field === 'material') {
+      const matchedItem = (masters.items || []).find(
+        i => i.item_name.toLowerCase() === (value || '').toLowerCase()
+      );
+      if (matchedItem && matchedItem.job_rate) {
+        updatedRow.rate = matchedItem.job_rate;
+      }
     }
 
-    if (field === 'type1' || field === 'type2' || field === 'rate' || field === 'b') {
-      updatedRow = calculateAmount(updatedRow);
+    if (
+      field === 'type1' ||
+      field === 'type1_b' ||
+      field === 'type2' ||
+      field === 'type2_b' ||
+      field === 'rate' ||
+      field === 'b' ||
+      field === 'material'
+    ) {
+      updatedRow = calculateAmount(updatedRow, masters.items, field);
     }
     setNewRow(updatedRow);
   };
 
   const handleSave = async () => {
     try {
-      if (!(newRow.type1 || newRow.type2)) {
+      if (!(newRow.type1 || newRow.type1_b || newRow.type2 || newRow.type2_b)) {
         alert('Please enter either Type 1 or Type 2');
         return;
       }
@@ -201,12 +262,18 @@ export default function MaterialOut() {
 
       if (!vendorId || !jobberId) return;
 
+      const item = (masters.items || []).find(i => i.item_name.toLowerCase() === (newRow.material || '').toLowerCase());
+      const w1 = item ? (Number(item.weight_type1) || 0) : 0;
+      const w2 = item ? (Number(item.weight_type2) || 0) : 0;
+
       const entryToSave = {
         ...newRow,
         jobber_id: jobberId,
         vendor_id: vendorId,
         type1: Number(newRow.type1) || 0,
+        type1_b: Number(newRow.type1_b) || 0,
         type2: Number(newRow.type2) || 0,
+        type2_b: Number(newRow.type2_b) || 0,
         rate: Number(newRow.rate) || 0,
         amount: Number(newRow.amount) || 0
       };
@@ -219,7 +286,7 @@ export default function MaterialOut() {
 
       if (resp.ok) {
         // setShowEntryRow(false);
-        setNewRow(INITIAL_ROW);
+        setNewRow(getInitialRow());
         fetchData();
       } else {
         const error = await resp.json();
@@ -280,10 +347,10 @@ export default function MaterialOut() {
     }
   };
 
-  const handleRedo = () => setNewRow(INITIAL_ROW);
+  const handleRedo = () => setNewRow(getInitialRow());
   const handleCancel = () => {
     setShowEntryRow(false);
-    setNewRow(INITIAL_ROW);
+    setNewRow(getInitialRow());
   };
 
   return (
@@ -325,7 +392,11 @@ export default function MaterialOut() {
                             <EditCombobox
                               field={col.key}
                               value={newRow[col.key]}
-                              options={masters[col.key === 'jobber' ? 'jobbers' : 'vendors'].map(m => m.name)}
+                              options={
+                                col.key === 'material'
+                                  ? (masters.items || []).map(i => i.item_name)
+                                  : (masters[col.key === 'jobber' ? 'jobbers' : 'vendors'] || []).map(m => m.name)
+                              }
                               onChange={handleInputChange}
                               onAddNewOption={handleAddNewOption}
                               onKeyDown={() => {}}
@@ -350,17 +421,47 @@ export default function MaterialOut() {
                             rows={1}
                             className="w-full bg-[#F1F5F9] border border-[#CBD5E1] rounded px-2 py-1.5 text-xs text-[#0F172A] outline-none focus:ring-1 focus:ring-[#2563EB] transition-all text-center resize-y min-h-[30px]"
                           />
+                        ) : col.key === 'type1' ? (
+                          <div className="flex flex-col gap-1.5">
+                            <input
+                              type="number"
+                              value={newRow.type1}
+                              onChange={(e) => handleInputChange('type1', e.target.value)}
+                              placeholder="Type 1 (KG)"
+                              className="w-full bg-[#F1F5F9] border border-[#CBD5E1] rounded px-2 py-1.5 text-xs text-[#0F172A] outline-none focus:ring-1 focus:ring-[#2563EB] transition-all text-center"
+                            />
+                            <input
+                              type="number"
+                              value={newRow.type1_b}
+                              onChange={(e) => handleInputChange('type1_b', e.target.value)}
+                              placeholder="Type 1 (Pcs)"
+                              className="w-full bg-[#F1F5F9] border border-[#CBD5E1] rounded px-2 py-1.5 text-xs text-[#0F172A] outline-none focus:ring-1 focus:ring-[#2563EB] transition-all text-center"
+                            />
+                          </div>
+                        ) : col.key === 'type2' ? (
+                          <div className="flex flex-col gap-1.5">
+                            <input
+                              type="number"
+                              value={newRow.type2}
+                              onChange={(e) => handleInputChange('type2', e.target.value)}
+                              placeholder="Type 2 (KG)"
+                              className="w-full bg-[#F1F5F9] border border-[#CBD5E1] rounded px-2 py-1.5 text-xs text-[#0F172A] outline-none focus:ring-1 focus:ring-[#2563EB] transition-all text-center"
+                            />
+                            <input
+                              type="number"
+                              value={newRow.type2_b}
+                              onChange={(e) => handleInputChange('type2_b', e.target.value)}
+                              placeholder="Type 2 (Pcs)"
+                              className="w-full bg-[#F1F5F9] border border-[#CBD5E1] rounded px-2 py-1.5 text-xs text-[#0F172A] outline-none focus:ring-1 focus:ring-[#2563EB] transition-all text-center"
+                            />
+                          </div>
                         ) : (
                           <input
                             type={col.type === 'number' ? 'number' : 'text'}
                             value={newRow[col.key]}
                             onChange={(e) => handleInputChange(col.key, e.target.value)}
-                            disabled={
-                              (col.key === 'type1' && Number(newRow.type2) > 0) || 
-                              (col.key === 'type2' && Number(newRow.type1) > 0)
-                            }
                             placeholder={col.label}
-                            className={`w-full bg-[#F1F5F9] border border-[#CBD5E1] rounded px-2 py-1.5 text-xs text-[#0F172A] outline-none focus:ring-1 focus:ring-[#2563EB] transition-all text-center ${(col.key === 'type1' && Number(newRow.type2) > 0) || (col.key === 'type2' && Number(newRow.type1) > 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className="w-full bg-[#F1F5F9] border border-[#CBD5E1] rounded px-2 py-1.5 text-xs text-[#0F172A] outline-none focus:ring-1 focus:ring-[#2563EB] transition-all text-center"
                           />
                         )}
                       </td>
@@ -386,10 +487,11 @@ export default function MaterialOut() {
             columns={COLUMNS}
             initialData={data}
             comboboxFields={{ 
-              jobber: masters.jobbers.map(j => j.name), 
-              vendor: masters.vendors.map(v => v.name) 
+              jobber: (masters.jobbers || []).map(j => j.name), 
+              vendor: (masters.vendors || []).map(v => v.name),
+              material: (masters.items || []).map(i => i.item_name)
             }}
-            calculateFields={calculateAmount}
+            calculateFields={(row, field) => calculateAmount(row, masters.items, field)}
             checkboxRecalcFields={['b']}
             onSave={handleUpdate}
             onDelete={handleDelete}

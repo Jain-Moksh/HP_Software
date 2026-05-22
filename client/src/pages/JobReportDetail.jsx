@@ -6,8 +6,8 @@ import EditMasterModal from '../components/EditMasterModal';
 import API_BASE_URL from '../config';
 
 const IN_COLUMNS = [
-  { key: 'type1',    label: 'Type 1',    type: 'number' },
-  { key: 'type2',    label: 'Type 2',    type: 'number' },
+  { key: 'type1',    label: 'Type 1',    type: 'stacked-number', subKey: 'type1_b' },
+  { key: 'type2',    label: 'Type 2',    type: 'stacked-number', subKey: 'type2_b' },
   { key: 'material', label: 'Material',  type: 'text', minWidth: '140px' },
   { key: 'seller',   label: 'Seller',    type: 'combobox' },
   { key: 'w',        label: 'W',         type: 'checkbox' },
@@ -18,14 +18,14 @@ const IN_COLUMNS = [
 ];
 
 const OUT_COLUMNS = [
-  { key: 'type1',    label: 'Type 1',    type: 'number' },
-  { key: 'type2',    label: 'Type 2',    type: 'number' },
-  { key: 'material', label: 'Material',  type: 'text', minWidth: '140px' },
-  { key: 'rate',     label: 'Rate',      type: 'number', prefix: '₹' },
-  { key: 'vendor',   label: 'Vendor',    type: 'combobox' },
-  { key: 'date',     label: 'Date',      type: 'date' },
-  { key: 'amount',   label: 'Amount',    type: 'computed', prefix: '₹' },
-  { key: 'remark',   label: 'Remark',    type: 'text', minWidth: '160px' },
+  { key: 'type1',    label: 'Type 1',    type: 'stacked-number', subKey: 'type1_b' },
+  { key: 'type2',    label: 'Type 2',    type: 'stacked-number', subKey: 'type2_b' },
+  { key: 'material', label: 'Material',     type: 'text', minWidth: '140px' },
+  { key: 'rate',     label: 'Rate',         type: 'number', prefix: '₹' },
+  { key: 'vendor',   label: 'Vendor',       type: 'combobox' },
+  { key: 'date',     label: 'Date',         type: 'date' },
+  { key: 'amount',   label: 'Amount',       type: 'computed', prefix: '₹' },
+  { key: 'remark',   label: 'Remark',       type: 'text', minWidth: '160px' },
 ];
 
 const MONTHS = [
@@ -54,10 +54,12 @@ const prepareTableData = (data, month, year, showDraftAdj = false) => {
   // Calculate Material Totals
   const matTotals = materialRows.reduce((acc, row) => {
     acc.type1 += (Number(row.type1) || 0);
+    acc.type1_b += (Number(row.type1_b) || 0);
     acc.type2 += (Number(row.type2) || 0);
+    acc.type2_b += (Number(row.type2_b) || 0);
     acc.amount += (Number(row.amount) || 0);
     return acc;
-  }, { type1: 0, type2: 0, amount: 0 });
+  }, { type1: 0, type1_b: 0, type2: 0, type2_b: 0, amount: 0 });
 
   const result = [...materialRows];
 
@@ -65,7 +67,9 @@ const prepareTableData = (data, month, year, showDraftAdj = false) => {
   result.push({
     id: `mat-total-${month}-${year}`,
     type1: matTotals.type1,
+    type1_b: matTotals.type1_b,
     type2: matTotals.type2,
+    type2_b: matTotals.type2_b,
     material: '---',
     rate: '---',
     vendor: '---',
@@ -83,10 +87,11 @@ const prepareTableData = (data, month, year, showDraftAdj = false) => {
       id: 'draft-adj',
       isDraft: true,
       tx_type: 'OUT_ADJ',
-      date: '',
+      date: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`,
       amount: 0,
       remark: 'Adjustment',
-      type1: '---', type2: '---', material: '---', rate: '---', vendor: '---',
+      type1: '---', type1_b: '---', type2: '---', type2_b: '---',
+      material: '---', rate: '---', vendor: '---',
       w: false, b: false, a: false
     });
   }
@@ -100,7 +105,9 @@ const prepareTableData = (data, month, year, showDraftAdj = false) => {
     result.push({
       id: `net-total-${month}-${year}`,
       type1: matTotals.type1, // usually stock doesn't change with adj
+      type1_b: matTotals.type1_b,
       type2: matTotals.type2,
+      type2_b: matTotals.type2_b,
       material: '---',
       rate: '---',
       vendor: '---',
@@ -130,7 +137,10 @@ export default function JobReportDetail() {
    const [selectedYear, setSelectedYear] = useState(currentYear);
    const [activeMonth, setActiveMonth]   = useState(currentMonth);
    const [showAdjEntry, setShowAdjEntry] = useState(false);
-   const [editModal, setEditModal] = useState({ isOpen: false, jobberId: null, jobberName: '' });
+   const [editModal, setEditModal] = useState({ 
+      isOpen: false, jobberId: null, jobberName: '', 
+      openingStockT1: 0, openingStockT2: 0, openingAmount: 0 
+   });
 
   const fetchMasters = async () => {
     try {
@@ -155,17 +165,22 @@ export default function JobReportDetail() {
     }
   };
 
-  const handleEditJobber = async (newName) => {
+  const handleEditJobber = async (newName, t1, t2, amt) => {
     try {
       const resp = await fetch(`${API_BASE_URL}/jobbers/${jobber.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName })
+        body: JSON.stringify({ 
+           name: newName,
+           opening_stock_type1: t1,
+           opening_stock_type2: t2,
+           opening_amount: amt
+        })
       });
       
       const data = await resp.json();
       if (resp.ok) {
-        setEditModal({ isOpen: false, jobberId: null, jobberName: '' });
+        setEditModal({ isOpen: false, jobberId: null, jobberName: '', openingStockT1: 0, openingStockT2: 0, openingAmount: 0 });
         await fetchMasters(); // This will refresh the jobber and subsequently fetch the new report!
       } else {
         alert(data.error || 'Failed to rename jobber');
@@ -205,6 +220,12 @@ export default function JobReportDetail() {
     }
     try {
       if (updatedRow.tx_type === 'OUT_ADJ' || updatedRow.isDraft) {
+        if (!updatedRow.date) {
+          alert('Please enter a valid date');
+          fetchReport(); // reload to clear invalid draft state
+          return;
+        }
+
         const isNew = updatedRow.isDraft;
         const url = isNew 
           ? `${API_BASE_URL}/adjustments`
@@ -396,6 +417,7 @@ export default function JobReportDetail() {
   };
 
   // Calculate Dynamic Opening/Closing Financial Balances (Amounts)
+  const baseOpeningAmount = report?.openingAmount || 0;
   const openingAmount = allTransactions.reduce((acc, tx) => {
     const d = new Date(tx.date);
     const m = d.getMonth();
@@ -454,9 +476,16 @@ export default function JobReportDetail() {
             <h1 className="text-xl font-bold text-[#0F172A] flex items-center gap-2">
               {jobber?.name} 
               <button 
-                onClick={() => setEditModal({ isOpen: true, jobberId: jobber.id, jobberName: jobber.name })}
+                onClick={() => setEditModal({ 
+                  isOpen: true, 
+                  jobberId: jobber.id, 
+                  jobberName: jobber.name,
+                  openingStockT1: baseOpening.type1 || 0,
+                  openingStockT2: baseOpening.type2 || 0,
+                  openingAmount: report?.openingAmount || 0
+                })}
                 className="p-1 text-[#94A3B8] hover:text-[#2563EB] hover:bg-blue-50 rounded transition-all"
-                title="Rename Jobber"
+                title="Edit Jobber"
               >
                 <Pencil size={14} />
               </button>
@@ -620,13 +649,45 @@ export default function JobReportDetail() {
           </div>
         </div>
       </div>
-      <EditMasterModal
-        isOpen={editModal.isOpen}
-        title={`Rename ${editModal.jobberName}`}
-        initialName={editModal.jobberName}
-        onClose={() => setEditModal({ isOpen: false, jobberId: null, jobberName: '' })}
-        onConfirm={handleEditJobber}
-      />
+      {editModal.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-[#E2E8F0] w-full max-w-sm p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
+                 <Pencil size={20} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-[#0F172A] leading-tight">Edit Jobber Details</h3>
+                <p className="text-xs text-[#64748B] mt-0.5 font-medium">Update name and opening balances.</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5 ml-1">Name</label>
+                <input type="text" value={editModal.jobberName} onChange={(e) => setEditModal({...editModal, jobberName: e.target.value})} className="w-full bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium" />
+              </div>
+              <div className="flex gap-3">
+                 <div className="flex-1">
+                   <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5 ml-1">Opening T1 (KG)</label>
+                   <input type="number" value={editModal.openingStockT1} onChange={(e) => setEditModal({...editModal, openingStockT1: Number(e.target.value)})} className="w-full bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl px-4 py-3 text-sm outline-none transition-all font-medium" />
+                 </div>
+                 <div className="flex-1">
+                   <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5 ml-1">Opening T2 (KG)</label>
+                   <input type="number" value={editModal.openingStockT2} onChange={(e) => setEditModal({...editModal, openingStockT2: Number(e.target.value)})} className="w-full bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl px-4 py-3 text-sm outline-none transition-all font-medium" />
+                 </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5 ml-1">Opening Amount (₹)</label>
+                <input type="number" value={editModal.openingAmount} onChange={(e) => setEditModal({...editModal, openingAmount: Number(e.target.value)})} className="w-full bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium" />
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button onClick={() => setEditModal({...editModal, isOpen: false})} className="px-4 py-3 text-sm font-bold text-[#64748B] bg-[#F1F5F9] hover:bg-[#E2E8F0] rounded-xl transition-all">Cancel</button>
+                <button onClick={() => handleEditJobber(editModal.jobberName, editModal.openingStockT1, editModal.openingStockT2, editModal.openingAmount)} className="px-4 py-3 text-sm font-bold text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl shadow-lg shadow-blue-200 transition-all">Save Changes</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

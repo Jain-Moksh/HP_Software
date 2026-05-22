@@ -15,6 +15,9 @@ pool.query('SELECT NOW()', (err, res) => {
     console.error('❌ Database connection error:', err.message);
   } else {
     console.log('✅ Connected to the PostgreSQL database');
+    // Auto-migrate missing columns for pieces
+    pool.query('ALTER TABLE transactions_out ADD COLUMN IF NOT EXISTS type1_b NUMERIC DEFAULT 0;').catch(e => console.error(e));
+    pool.query('ALTER TABLE transactions_out ADD COLUMN IF NOT EXISTS type2_b NUMERIC DEFAULT 0;').catch(e => console.error(e));
   }
 });
 

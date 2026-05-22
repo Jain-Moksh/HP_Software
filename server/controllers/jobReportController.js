@@ -6,11 +6,12 @@ exports.getJobReport = async (req, res) => {
     const { jobber } = req.params;
 
     // 1. Find jobber ID from name
-    const jobberResult = await db.query('SELECT id FROM jobbers WHERE name = $1', [jobber]);
+    const jobberResult = await db.query('SELECT * FROM jobbers WHERE name = $1', [jobber]);
     if (jobberResult.rows.length === 0) {
         return res.status(404).json({ error: 'Jobber not found' });
     }
-    const jobberId = jobberResult.rows[0].id;
+    const jobberData = jobberResult.rows[0];
+    const jobberId = jobberData.id;
 
     // 2. Fetch IN transactions
     const inRes = await db.query(`
@@ -63,7 +64,11 @@ exports.getJobReport = async (req, res) => {
     );
 
     // 5. Calculate Stock
-    const openingStock = { type1: 0, type2: 0 };
+    const openingStock = { 
+        type1: Number(jobberData.opening_stock_type1) || 0, 
+        type2: Number(jobberData.opening_stock_type2) || 0 
+    };
+    const openingAmount = Number(jobberData.opening_amount) || 0;
     
     let totalInT1 = 0, totalInT2 = 0;
     let totalOutT1 = 0, totalOutT2 = 0;
@@ -97,6 +102,7 @@ exports.getJobReport = async (req, res) => {
       jobberId,
       jobberName: jobber,
       openingStock,
+      openingAmount,
       transactions,
       closingStock
     });

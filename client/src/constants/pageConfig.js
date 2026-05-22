@@ -31,6 +31,10 @@ export const PAGE_CONFIG = {
     title: 'SYSTEM RESTORE',
     subtitle: 'RECOVER DATABASE FROM BACKUP FILES'
   },
+  '/item-master': {
+    title: 'Item Master',
+    subtitle: 'Manage and configure your items database'
+  },
 };
 
 export const getPageInfo = (pathname) => {

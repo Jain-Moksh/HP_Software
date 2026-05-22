@@ -17,6 +17,17 @@ CREATE TABLE IF NOT EXISTS vendors (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS items (
+    id SERIAL PRIMARY KEY,
+    item_name VARCHAR(255) UNIQUE NOT NULL,
+    description TEXT,
+    job_rate NUMERIC DEFAULT 0,
+    weight_type1 NUMERIC DEFAULT 0,
+    weight_type2 NUMERIC DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Transaction Tables (v2)
 CREATE TABLE IF NOT EXISTS transactions_in (
     id SERIAL PRIMARY KEY,

@@ -10,6 +10,7 @@ import SellerReportDetail from './pages/SellerReportDetail';
 import UtilityDashboard from './pages/UtilityDashboard';
 import BackupManagement from './pages/BackupManagement';
 import SystemRestore from './pages/SystemRestore';
+import ItemMaster from './pages/ItemMaster';
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="material-in" element={<MaterialIn />} />
           <Route path="material-transfer" element={<MaterialTransfer />} />
           <Route path="material-out" element={<MaterialOut />} />
+          <Route path="item-master" element={<ItemMaster />} />
           
           {/* Job Reports */}
           <Route path="job-report" element={<JobReport />} />
