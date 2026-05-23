@@ -73,7 +73,22 @@ initPromise = init();
 module.exports = {
   query: async (text, params) => {
     if (!isInitialized) await initPromise;
-    return pool.query(text, params);
+    try {
+      return await pool.query(text, params);
+    } catch (err) {
+      // 42P01 is the PostgreSQL error code for 'undefined_table'
+      if (err.code === '42P01') {
+        console.warn(`[Auto-Repair] Missing table detected (42P01). Running schema.sql...`);
+        const schemaPath = path.join(__dirname, '../schema.sql');
+        if (fs.existsSync(schemaPath)) {
+          const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+          await pool.query(schemaSql);
+          console.log('[Auto-Repair] Schema successfully recreated. Retrying query...');
+          return await pool.query(text, params);
+        }
+      }
+      throw err;
+    }
   },
   connect: async () => {
     if (!isInitialized) await initPromise;
