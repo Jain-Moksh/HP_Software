@@ -22,6 +22,10 @@ The HP Accounting Software backend is a RESTful API built with Express.js.
 | `/api/sellers/:id` | `DELETE` | Delete a seller — Body: `{ password }` |
 | `/api/vendors` | `GET` | List all vendors |
 | `/api/vendors` | `POST` | Create a vendor `{ name }` |
+| `/api/items` | `GET` | List all items |
+| `/api/items` | `POST` | Create an item `{ item_name, description, job_rate, weight_type1, weight_type2 }` |
+| `/api/items/:id` | `PUT` | Update an item `{ item_name, description, job_rate, weight_type1, weight_type2 }` |
+| `/api/items/:id` | `DELETE` | Delete an item — Body/Header: `{ password }` |
 
 ---
 

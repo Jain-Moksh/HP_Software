@@ -12,6 +12,7 @@ HP Accounting Software is a specialized inventory and financial management syste
   - `/material-in` (Material Inward entry and list)
   - `/material-transfer` (Jobber-to-Jobber stock transfers)
   - `/material-out` (Material Outward entry and list)
+  - `/item-master` (Item Master management)
   - `/job-report` (Jobbers list and master summary)
   - `/job-report/:id` (Detailed jobber ledger and monthly stock report)
   - `/seller-report` (Sellers list and master summary)
@@ -52,6 +53,7 @@ HP_Accounting_Software/
 │   │   │   ├── Material-In.jsx        # Inward entries management
 │   │   │   ├── Material-Transfer.jsx  # Jobber to Jobber physical transfers
 │   │   │   ├── Material-Out.jsx       # Outward entries management
+│   │   │   ├── ItemMaster.jsx         # Item master configuration and rates
 │   │   │   ├── JobReport.jsx          # Jobbers overview and search
 │   │   │   ├── JobReportDetail.jsx    # Detailed Ledger, Stock IN/OUT/Transfer reports
 │   │   │   ├── SellerReport.jsx       # Sellers list and overall balances
