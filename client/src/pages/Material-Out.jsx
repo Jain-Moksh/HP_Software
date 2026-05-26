@@ -111,6 +111,16 @@ export default function MaterialOut() {
   const [newRow, setNewRow] = useState(getInitialRow());
   const [loading, setLoading] = useState(true);
 
+  // New Item Modal State
+  const [showItemModal, setShowItemModal] = useState(false);
+  const [newItemForm, setNewItemForm] = useState({
+    item_name: '',
+    description: '',
+    job_rate: '',
+    weight_type1: '',
+    weight_type2: ''
+  });
+
   // Fetch initial data
   const fetchData = useCallback(async () => {
     try {
@@ -188,6 +198,39 @@ export default function MaterialOut() {
       }));
     } else {
       await ensureMasterRecord(field, value);
+    }
+  };
+
+  const handleSaveNewItem = async () => {
+    try {
+      if (!newItemForm.item_name.trim()) {
+        alert('Item Name is required');
+        return;
+      }
+      const entryToSave = {
+        item_name: newItemForm.item_name.trim(),
+        description: newItemForm.description.trim(),
+        job_rate: Number(newItemForm.job_rate) || 0,
+        weight_type1: Number(newItemForm.weight_type1) || 0,
+        weight_type2: Number(newItemForm.weight_type2) || 0
+      };
+      const resp = await fetch(`${API_BASE_URL}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entryToSave),
+      });
+      if (resp.ok) {
+        await fetchMasters();
+        setNewRow(prev => ({ ...prev, material: entryToSave.item_name, rate: entryToSave.job_rate }));
+        setShowItemModal(false);
+        setNewItemForm({ item_name: '', description: '', job_rate: '', weight_type1: '', weight_type2: '' });
+      } else {
+        const error = await resp.json();
+        alert(error.error || 'Failed to save item.');
+      }
+    } catch (err) {
+      console.error('Save item error:', err);
+      alert('Error connecting to server.');
     }
   };
 
@@ -388,19 +431,30 @@ export default function MaterialOut() {
                             />
                           </div>
                         ) : col.type === 'combobox' ? (
-                          <div className="flex justify-center">
-                            <EditCombobox
-                              field={col.key}
-                              value={newRow[col.key]}
-                              options={
-                                col.key === 'material'
-                                  ? (masters.items || []).map(i => i.item_name)
-                                  : (masters[col.key === 'jobber' ? 'jobbers' : 'vendors'] || []).map(m => m.name)
-                              }
-                              onChange={handleInputChange}
-                              onAddNewOption={handleAddNewOption}
-                              onKeyDown={() => {}}
-                            />
+                          <div className="flex flex-col items-center w-full">
+                            <div className="flex justify-center w-full">
+                              <EditCombobox
+                                field={col.key}
+                                value={newRow[col.key]}
+                                options={
+                                  col.key === 'material'
+                                    ? (masters.items || []).map(i => i.item_name)
+                                    : (masters[col.key === 'jobber' ? 'jobbers' : 'vendors'] || []).map(m => m.name)
+                                }
+                                onChange={handleInputChange}
+                                onAddNewOption={handleAddNewOption}
+                                onKeyDown={() => {}}
+                              />
+                            </div>
+                            {col.key === 'material' && (
+                              <button
+                                onClick={() => setShowItemModal(true)}
+                                className="text-[10px] text-[#2563EB] hover:underline mt-1"
+                                type="button"
+                              >
+                                + New Item
+                              </button>
+                            )}
                           </div>
                         ) : col.type === 'computed' ? (
                           <div className="font-mono font-bold text-[#0F172A]">
@@ -499,6 +553,92 @@ export default function MaterialOut() {
           />
         )}
       </div>
+
+      {/* New Item Modal */}
+      {showItemModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-lg shadow-lg w-[400px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-[#334155] text-white px-4 py-3 flex justify-between items-center">
+              <h3 className="text-sm font-semibold tracking-wide">Add New Item</h3>
+              <button onClick={() => setShowItemModal(false)} className="text-white hover:text-gray-300">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-4 flex flex-col gap-3 text-sm">
+              <div>
+                <label className="block text-xs font-semibold text-[#475569] mb-1">Item Name <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={newItemForm.item_name}
+                  onChange={e => setNewItemForm({ ...newItemForm, item_name: e.target.value })}
+                  className="w-full border border-[#CBD5E1] rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  placeholder="E.g. Steel Rods"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#475569] mb-1">Description</label>
+                <input
+                  type="text"
+                  value={newItemForm.description}
+                  onChange={e => setNewItemForm({ ...newItemForm, description: e.target.value })}
+                  className="w-full border border-[#CBD5E1] rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  placeholder="Optional description"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#475569] mb-1">Job Rate</label>
+                  <input
+                    type="number"
+                    value={newItemForm.job_rate}
+                    onChange={e => setNewItemForm({ ...newItemForm, job_rate: e.target.value })}
+                    className="w-full border border-[#CBD5E1] rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    placeholder="0"
+                  />
+                </div>
+                <div></div> {/* spacer */}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#475569] mb-1">Weight Type 1 (KG)</label>
+                  <input
+                    type="number"
+                    value={newItemForm.weight_type1}
+                    onChange={e => setNewItemForm({ ...newItemForm, weight_type1: e.target.value })}
+                    className="w-full border border-[#CBD5E1] rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#475569] mb-1">Weight Type 2 (KG)</label>
+                  <input
+                    type="number"
+                    value={newItemForm.weight_type2}
+                    onChange={e => setNewItemForm({ ...newItemForm, weight_type2: e.target.value })}
+                    className="w-full border border-[#CBD5E1] rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="bg-[#F8FAFC] px-4 py-3 border-t border-[#E2E8F0] flex justify-end gap-2">
+              <button
+                onClick={() => setShowItemModal(false)}
+                className="px-3 py-1.5 text-xs font-medium text-[#64748B] hover:text-[#0F172A] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveNewItem}
+                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded shadow-sm transition-colors"
+              >
+                <Save size={14} /> Save Item
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
