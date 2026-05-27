@@ -430,7 +430,7 @@ export default function JobReportDetail() {
       }
     }
     return acc;
-  }, 0);
+  }, baseOpeningAmount);
 
   const currentNetAmount = allTransactions.reduce((acc, tx) => {
     const d = new Date(tx.date);
