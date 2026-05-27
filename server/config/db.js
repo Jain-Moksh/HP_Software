@@ -58,6 +58,27 @@ async function init() {
     await pool.query('ALTER TABLE transactions_out ADD COLUMN IF NOT EXISTS type1_b NUMERIC DEFAULT 0;').catch(e => console.error(e));
     await pool.query('ALTER TABLE transactions_out ADD COLUMN IF NOT EXISTS type2_b NUMERIC DEFAULT 0;').catch(e => console.error(e));
 
+    // Auto-migrate jobbers missing columns
+    await pool.query('ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_stock_type1 NUMERIC DEFAULT 0;').catch(e => console.error(e));
+    await pool.query('ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_stock_type2 NUMERIC DEFAULT 0;').catch(e => console.error(e));
+    await pool.query('ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_amount NUMERIC DEFAULT 0;').catch(e => console.error(e));
+
+    // Auto-migrate items table schema
+    try {
+      const res = await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'items' AND column_name = 'name';`);
+      if (res.rows.length > 0) {
+        await pool.query(`ALTER TABLE items RENAME COLUMN name TO item_name`);
+      }
+      await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS description TEXT;');
+      await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS job_rate NUMERIC DEFAULT 0;');
+      await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS weight_type1 NUMERIC DEFAULT 0;');
+      await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS weight_type2 NUMERIC DEFAULT 0;');
+      await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;');
+      await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;');
+    } catch (e) {
+      console.error('Error auto-migrating items table:', e);
+    }
+
     console.log('✅ Connected to the PostgreSQL database');
     isInitialized = true;
   } catch (err) {

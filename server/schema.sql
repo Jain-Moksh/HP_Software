@@ -2,6 +2,9 @@
 CREATE TABLE IF NOT EXISTS jobbers (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) UNIQUE NOT NULL,
+    opening_stock_type1 NUMERIC DEFAULT 0,
+    opening_stock_type2 NUMERIC DEFAULT 0,
+    opening_amount NUMERIC DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

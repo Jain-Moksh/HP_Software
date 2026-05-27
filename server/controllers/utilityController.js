@@ -55,14 +55,24 @@ const generateBackupSql = async () => {
   sqlParts.push(`-- HP Accounting Software Programmatic Backup\n`);
   sqlParts.push(`-- Generated: ${new Date().toLocaleString()}\n\n`);
   sqlParts.push(`BEGIN;\n\n`);
-  sqlParts.push(`TRUNCATE TABLE seller_adjustments, jobber_adjustments, material_transfers, transactions_out, transactions_in, vendors, sellers, jobbers RESTART IDENTITY CASCADE;\n\n`);
+  sqlParts.push(`TRUNCATE TABLE seller_adjustments, jobber_adjustments, material_transfers, transactions_out, transactions_in, vendors, sellers, jobbers, items RESTART IDENTITY CASCADE;\n\n`);
+
+  // 0. items
+  const items = await db.query('SELECT * FROM items ORDER BY id');
+  if (items.rows.length > 0) {
+    sqlParts.push(`-- Dumping items\n`);
+    for (const r of items.rows) {
+      sqlParts.push(`INSERT INTO items (id, item_name, description, job_rate, weight_type1, weight_type2, created_at, updated_at) VALUES (${r.id}, ${escapeSqlStr(r.item_name)}, ${escapeSqlStr(r.description)}, ${r.job_rate || 0}, ${r.weight_type1 || 0}, ${r.weight_type2 || 0}, ${escapeSqlDate(r.created_at)}, ${escapeSqlDate(r.updated_at)});\n`);
+    }
+    sqlParts.push(`\n`);
+  }
 
   // 1. jobbers
   const jobbers = await db.query('SELECT * FROM jobbers ORDER BY id');
   if (jobbers.rows.length > 0) {
     sqlParts.push(`-- Dumping jobbers\n`);
     for (const r of jobbers.rows) {
-      sqlParts.push(`INSERT INTO jobbers (id, name, created_at) VALUES (${r.id}, ${escapeSqlStr(r.name)}, ${escapeSqlDate(r.created_at)});\n`);
+      sqlParts.push(`INSERT INTO jobbers (id, name, opening_stock_type1, opening_stock_type2, opening_amount, created_at) VALUES (${r.id}, ${escapeSqlStr(r.name)}, ${r.opening_stock_type1 || 0}, ${r.opening_stock_type2 || 0}, ${r.opening_amount || 0}, ${escapeSqlDate(r.created_at)});\n`);
     }
     sqlParts.push(`\n`);
   }
@@ -139,6 +149,7 @@ const generateBackupSql = async () => {
 
   // Reset Sequences
   sqlParts.push(`-- Resetting Sequences\n`);
+  sqlParts.push(`SELECT setval(pg_get_serial_sequence('items', 'id'), COALESCE(MAX(id), 1)) FROM items;\n`);
   sqlParts.push(`SELECT setval(pg_get_serial_sequence('jobbers', 'id'), COALESCE(MAX(id), 1)) FROM jobbers;\n`);
   sqlParts.push(`SELECT setval(pg_get_serial_sequence('sellers', 'id'), COALESCE(MAX(id), 1)) FROM sellers;\n`);
   sqlParts.push(`SELECT setval(pg_get_serial_sequence('vendors', 'id'), COALESCE(MAX(id), 1)) FROM vendors;\n`);
@@ -302,7 +313,34 @@ exports.restoreBackup = async (req, res) => {
       })
       .join('\n');
 
-    // 3. Run the cleaned SQL script inside the database connection
+    // 3. Ensure 'created_at' exists on tables (handles older schemas) before running the cleaned SQL script
+    const tablesWithCreatedAt = ['jobbers', 'sellers', 'vendors', 'transactions_in', 'transactions_out', 'jobber_adjustments', 'seller_adjustments', 'material_transfers'];
+    for (const table of tablesWithCreatedAt) {
+      try {
+        await db.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
+      } catch (err) {
+        console.warn(`Could not add created_at to ${table}:`, err.message);
+      }
+    }
+
+    // 3.5 Ensure opening balance columns exist for jobbers
+    try {
+      await db.query(`ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_stock_type1 NUMERIC DEFAULT 0`);
+      await db.query(`ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_stock_type2 NUMERIC DEFAULT 0`);
+      await db.query(`ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_amount NUMERIC DEFAULT 0`);
+    } catch (err) {
+      console.warn(`Could not add opening balance columns to jobbers:`, err.message);
+    }
+
+    // 4. Wipe existing data to ensure we create a new database state instead of merging
+    const tablesToWipe = ['seller_adjustments', 'jobber_adjustments', 'material_transfers', 'transactions_out', 'transactions_in', 'vendors', 'sellers', 'jobbers', 'items'];
+    try {
+      await db.query(`TRUNCATE TABLE ${tablesToWipe.join(', ')} RESTART IDENTITY CASCADE;`);
+    } catch (err) {
+      console.warn('Could not truncate all tables before restore:', err.message);
+    }
+
+    // 5. Run the cleaned SQL script inside the database connection
     await db.query(cleanedSql);
 
     res.json({ success: true, message: 'Database restored successfully' });
