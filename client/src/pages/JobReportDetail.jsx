@@ -137,6 +137,7 @@ export default function JobReportDetail() {
    const [selectedYear, setSelectedYear] = useState(currentYear);
    const [activeMonth, setActiveMonth]   = useState(currentMonth);
    const [showAdjEntry, setShowAdjEntry] = useState(false);
+   const [activeTab, setActiveTab] = useState('OUT');
    const [editModal, setEditModal] = useState({ 
       isOpen: false, jobberId: null, jobberName: '', 
       openingStockT1: 0, openingStockT2: 0, openingAmount: 0 
@@ -550,72 +551,92 @@ export default function JobReportDetail() {
 
       {/* ── Fixed Split Body (No main scroll) ── */}
       <div className="flex-1 p-4 flex flex-col gap-4 overflow-hidden">
-        {/* Table IN */}
-        <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden flex flex-col">
-          <div className="px-4 py-2 bg-[#F1F5F9] border-b border-[#E2E8F0] flex items-center justify-between">
-            <h3 className="text-xs font-bold text-[#0F172A] flex items-center gap-2">
-              <TrendingUp size={14} className="text-emerald-500" /> Material Inward (IN)
-            </h3>
-            <span className="text-[10px] font-bold text-[#64748B] bg-white px-2 py-0.5 rounded border border-[#E2E8F0]">
-               {inTransactions.filter(r => {
-                 const d = new Date(r.date);
-                 return d.getMonth() === activeMonth && d.getFullYear() === selectedYear;
-               }).length} Records
-            </span>
-          </div>
-          <div className="flex-1 overflow-auto">
-            <DataTable 
-              columns={IN_COLUMNS}
-              initialData={prepareTableData(inTransactions, activeMonth, selectedYear)}
-              comboboxFields={{ 
-                seller: masters.sellers.map(s => s.name), 
-                jobber: masters.jobbers.map(j => j.name)
-              }}
-              onSave={handleUpdate}
-              onAddNewOption={handleAddNewOption}
-              onDelete={(id, pass) => handleDelete(id, pass, 'IN')}
-              hideFilters={true}
-            />
-          </div>
+        {/* TABS */}
+        <div className="flex gap-2 shrink-0">
+           <button 
+             onClick={() => setActiveTab('IN')} 
+             className={`px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-all ${
+               activeTab === 'IN' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-white border border-[#E2E8F0] text-[#64748B] hover:bg-[#F8FAFC]'
+             }`}
+           >
+             <TrendingUp size={14} /> Material Inward (IN)
+           </button>
+           <button 
+             onClick={() => setActiveTab('OUT')} 
+             className={`px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-all ${
+               activeTab === 'OUT' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-white border border-[#E2E8F0] text-[#64748B] hover:bg-[#F8FAFC]'
+             }`}
+           >
+             <TrendingDown size={14} /> Material Outward (OUT)
+           </button>
         </div>
 
-        {/* Table OUT */}
-        <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden flex flex-col">
-          <div className="px-4 py-2 bg-[#F1F5F9] border-b border-[#E2E8F0] flex items-center justify-between">
-            <h3 className="text-xs font-bold text-[#0F172A] flex items-center gap-2">
-              <TrendingDown size={14} className="text-rose-500" /> Material Outward (OUT)
-            </h3>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => setShowAdjEntry(true)}
-                className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 rounded text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
-                title="Add Deduction/Payment"
-              >
-                <Plus size={12} /> PAY
-              </button>
+        {activeTab === 'IN' ? (
+          <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden flex flex-col">
+            <div className="px-4 py-2 bg-[#F1F5F9] border-b border-[#E2E8F0] flex items-center justify-between">
+              <h3 className="text-xs font-bold text-[#0F172A] flex items-center gap-2">
+                <TrendingUp size={14} className="text-emerald-500" /> Material Inward (IN)
+              </h3>
               <span className="text-[10px] font-bold text-[#64748B] bg-white px-2 py-0.5 rounded border border-[#E2E8F0]">
-                {outTransactions.filter(r => {
+                 {inTransactions.filter(r => {
                    const d = new Date(r.date);
                    return d.getMonth() === activeMonth && d.getFullYear() === selectedYear;
                  }).length} Records
               </span>
             </div>
+            <div className="flex-1 overflow-auto">
+              <DataTable 
+                columns={IN_COLUMNS}
+                initialData={prepareTableData(inTransactions, activeMonth, selectedYear)}
+                comboboxFields={{ 
+                  seller: masters.sellers.map(s => s.name), 
+                  jobber: masters.jobbers.map(j => j.name)
+                }}
+                onSave={handleUpdate}
+                onAddNewOption={handleAddNewOption}
+                onDelete={(id, pass) => handleDelete(id, pass, 'IN')}
+                hideFilters={true}
+              />
+            </div>
           </div>
-          <div className="flex-1 overflow-auto">
-            <DataTable 
-              columns={OUT_COLUMNS}
-              initialData={prepareTableData(outTransactions, activeMonth, selectedYear, showAdjEntry)}
-              comboboxFields={{ 
-                vendor: masters.vendors.map(v => v.name),
-                jobber: masters.jobbers.map(j => j.name)
-              }}
-              onSave={handleUpdate}
-              onAddNewOption={handleAddNewOption}
-              onDelete={(id, pass, type) => handleDelete(id, pass, type || 'OUT')}
-              hideFilters={true}
-            />
+        ) : (
+          <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden flex flex-col">
+            <div className="px-4 py-2 bg-[#F1F5F9] border-b border-[#E2E8F0] flex items-center justify-between">
+              <h3 className="text-xs font-bold text-[#0F172A] flex items-center gap-2">
+                <TrendingDown size={14} className="text-rose-500" /> Material Outward (OUT)
+              </h3>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setShowAdjEntry(true)}
+                  className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 rounded text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
+                  title="Add Deduction/Payment"
+                >
+                  <Plus size={12} /> PAY
+                </button>
+                <span className="text-[10px] font-bold text-[#64748B] bg-white px-2 py-0.5 rounded border border-[#E2E8F0]">
+                  {outTransactions.filter(r => {
+                     const d = new Date(r.date);
+                     return d.getMonth() === activeMonth && d.getFullYear() === selectedYear;
+                   }).length} Records
+                </span>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto">
+              <DataTable 
+                columns={OUT_COLUMNS}
+                initialData={prepareTableData(outTransactions, activeMonth, selectedYear, showAdjEntry)}
+                comboboxFields={{ 
+                  vendor: masters.vendors.map(v => v.name),
+                  jobber: masters.jobbers.map(j => j.name)
+                }}
+                onSave={handleUpdate}
+                onAddNewOption={handleAddNewOption}
+                onDelete={(id, pass, type) => handleDelete(id, pass, type || 'OUT')}
+                hideFilters={true}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ── Shared Footer Pagination ── */}
