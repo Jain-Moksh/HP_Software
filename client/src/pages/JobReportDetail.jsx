@@ -6,9 +6,9 @@ import EditMasterModal from '../components/EditMasterModal';
 import API_BASE_URL from '../config';
 
 const IN_COLUMNS = [
+  { key: 'material', label: 'Material',  type: 'text', minWidth: '140px' },
   { key: 'type1',    label: 'Type 1',    type: 'stacked-number', subKey: 'type1_b' },
   { key: 'type2',    label: 'Type 2',    type: 'stacked-number', subKey: 'type2_b' },
-  { key: 'material', label: 'Material',  type: 'text', minWidth: '140px' },
   { key: 'seller',   label: 'Seller',    type: 'combobox' },
   { key: 'w',        label: 'W',         type: 'checkbox' },
   { key: 'b',        label: 'B',         type: 'checkbox' },
@@ -18,9 +18,9 @@ const IN_COLUMNS = [
 ];
 
 const OUT_COLUMNS = [
+  { key: 'material', label: 'Material',     type: 'text', minWidth: '140px' },
   { key: 'type1',    label: 'Type 1',    type: 'stacked-number', subKey: 'type1_b' },
   { key: 'type2',    label: 'Type 2',    type: 'stacked-number', subKey: 'type2_b' },
-  { key: 'material', label: 'Material',     type: 'text', minWidth: '140px' },
   { key: 'rate',     label: 'Rate',         type: 'number', prefix: '₹' },
   { key: 'vendor',   label: 'Vendor',       type: 'combobox' },
   { key: 'date',     label: 'Date',         type: 'date' },
