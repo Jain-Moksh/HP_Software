@@ -33,8 +33,8 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const prepareTableData = (data, month, year, showDraftAdj = false) => {
-  if (!data && !showDraftAdj) return [];
+const prepareTableData = (data, month, year) => {
+  if (!data) return [];
   
   const allProcessed = (data || []).map(item => {
     const d = item.date ? new Date(item.date) : new Date();
@@ -80,21 +80,8 @@ const prepareTableData = (data, month, year, showDraftAdj = false) => {
     isTotalHeader: true // to distinguish if needed
   });
 
-  // Adjustment Rows + Draft
+  // Adjustment Rows
   const adjGroup = [...savedAdjRows];
-  if (showDraftAdj) {
-    adjGroup.push({
-      id: 'draft-adj',
-      isDraft: true,
-      tx_type: 'OUT_ADJ',
-      date: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`,
-      amount: 0,
-      remark: 'Adjustment',
-      type1: '---', type1_b: '---', type2: '---', type2_b: '---',
-      material: '---', rate: '---', vendor: '---',
-      w: false, b: false, a: false
-    });
-  }
 
   if (adjGroup.length > 0) {
     result.push(...adjGroup);
@@ -136,7 +123,7 @@ export default function JobReportDetail() {
   // Lifted Filter State
    const [selectedYear, setSelectedYear] = useState(currentYear);
    const [activeMonth, setActiveMonth]   = useState(currentMonth);
-   const [showAdjEntry, setShowAdjEntry] = useState(false);
+   const [payModal, setPayModal] = useState({ isOpen: false, date: new Date().toISOString().split('T')[0], amount: '', remark: '' });
    const [activeTab, setActiveTab] = useState('OUT');
    const [editModal, setEditModal] = useState({ 
       isOpen: false, jobberId: null, jobberName: '', 
@@ -214,23 +201,52 @@ export default function JobReportDetail() {
     return null;
   };
 
+  const handleSavePayment = async () => {
+    if (!payModal.date || !payModal.amount) {
+      alert('Please enter a valid date and amount');
+      return;
+    }
+
+    try {
+      const payload = {
+        jobber_id: jobber.id || report?.jobberId,
+        amount: Number(payModal.amount),
+        date: payModal.date,
+        remark: payModal.remark
+      };
+
+      const resp = await fetch(`${API_BASE_URL}/adjustments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (resp.ok) {
+        setPayModal({ isOpen: false, date: new Date().toISOString().split('T')[0], amount: '', remark: '' });
+        fetchReport();
+      } else {
+        alert('Failed to save payment.');
+      }
+    } catch (err) {
+      console.error('Save payment error:', err);
+      alert('An error occurred while saving payment');
+    }
+  };
+
   const handleUpdate = async (updatedRow, type) => {
     if (updatedRow.isTotal) {
        fetchReport();
        return;
     }
     try {
-      if (updatedRow.tx_type === 'OUT_ADJ' || updatedRow.isDraft) {
+      if (updatedRow.tx_type === 'OUT_ADJ') {
         if (!updatedRow.date) {
           alert('Please enter a valid date');
-          fetchReport(); // reload to clear invalid draft state
+          fetchReport(); 
           return;
         }
 
-        const isNew = updatedRow.isDraft;
-        const url = isNew 
-          ? `${API_BASE_URL}/adjustments`
-          : `${API_BASE_URL}/adjustments/${updatedRow.id}`;
+        const url = `${API_BASE_URL}/adjustments/${updatedRow.id}`;
         
         const payload = {
           jobber_id: jobber.id || report?.jobberId || (await ensureMasterRecord('jobber', jobber.name)),
@@ -240,13 +256,12 @@ export default function JobReportDetail() {
         };
 
         const resp = await fetch(url, {
-          method: isNew ? 'POST' : 'PUT',
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
 
         if (resp.ok) {
-          setShowAdjEntry(false);
           fetchReport();
         } else {
           alert('Failed to save adjustment.');
@@ -607,7 +622,7 @@ export default function JobReportDetail() {
               </h3>
               <div className="flex items-center gap-2">
                 <button 
-                  onClick={() => setShowAdjEntry(true)}
+                  onClick={() => setPayModal({ isOpen: true, date: new Date().toISOString().split('T')[0], amount: '', remark: '' })}
                   className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 rounded text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
                   title="Add Deduction/Payment"
                 >
@@ -624,7 +639,7 @@ export default function JobReportDetail() {
             <div className="flex-1 overflow-auto">
               <DataTable 
                 columns={OUT_COLUMNS}
-                initialData={prepareTableData(outTransactions, activeMonth, selectedYear, showAdjEntry)}
+                initialData={prepareTableData(outTransactions, activeMonth, selectedYear)}
                 comboboxFields={{ 
                   vendor: masters.vendors.map(v => v.name),
                   jobber: masters.jobbers.map(j => j.name)
@@ -670,6 +685,40 @@ export default function JobReportDetail() {
           </div>
         </div>
       </div>
+      {payModal.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-[#E2E8F0] w-full max-w-sm p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center text-rose-600">
+                 <IndianRupee size={20} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-[#0F172A] leading-tight">Add Payment</h3>
+                <p className="text-xs text-[#64748B] mt-0.5 font-medium">Enter payment details below.</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5 ml-1">Date</label>
+                <input type="date" value={payModal.date} onChange={(e) => setPayModal({...payModal, date: e.target.value})} className="w-full bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all font-medium" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5 ml-1">Amount (₹)</label>
+                <input type="number" value={payModal.amount} onChange={(e) => setPayModal({...payModal, amount: e.target.value})} className="w-full bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all font-medium" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5 ml-1">Remarks</label>
+                <input type="text" value={payModal.remark} onChange={(e) => setPayModal({...payModal, remark: e.target.value})} className="w-full bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all font-medium" />
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button onClick={() => setPayModal({...payModal, isOpen: false})} className="px-4 py-3 text-sm font-bold text-[#64748B] bg-[#F1F5F9] hover:bg-[#E2E8F0] rounded-xl transition-all">Cancel</button>
+                <button onClick={handleSavePayment} className="px-4 py-3 text-sm font-bold text-white bg-[#E11D48] hover:bg-[#BE123C] rounded-xl shadow-lg shadow-rose-200 transition-all">Save Payment</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {editModal.isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl border border-[#E2E8F0] w-full max-w-sm p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
