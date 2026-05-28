@@ -2,19 +2,69 @@ const db = require('../config/db');
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
+const ftp = require('basic-ftp');
+const stream = require('stream');
 
 const configPath = path.join(__dirname, '..', 'config', 'backup-config.json');
+
+const isValidLocalOrUncPath = (p) => {
+  if (!p || typeof p !== 'string') return false;
+  
+  // Reject URLs starting with protocols like ftp:, http:, sftp:, etc.
+  if (/^(ftp|http|https|sftp|ftps):/i.test(p)) {
+    return false;
+  }
+  
+  // On Windows, check for invalid characters: *, ?, ", <, >, |
+  const invalidChars = /[*\?"<>|]/;
+  if (invalidChars.test(p)) return false;
+  
+  // Check for colon
+  const colonIndex = p.indexOf(':');
+  if (colonIndex !== -1) {
+    if (colonIndex !== 1 && !(colonIndex === 2 && (p.startsWith('/') || p.startsWith('\\')))) {
+      return false;
+    }
+    const driveLetter = p[colonIndex - 1];
+    if (!/^[a-zA-Z]$/.test(driveLetter)) {
+      return false;
+    }
+  }
+  
+  return true;
+};
 
 // Helper to read config
 const readConfig = () => {
   try {
     const data = fs.readFileSync(configPath, 'utf8');
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    return {
+      enabled: !!parsed.enabled,
+      interval: Number(parsed.interval) || 1440,
+      path: parsed.path || "C:/Moksh Software",
+      backupType: parsed.backupType || "local",
+      ftpHost: parsed.ftpHost || "",
+      ftpPort: Number(parsed.ftpPort) || 21,
+      ftpUser: parsed.ftpUser || "",
+      ftpPassword: parsed.ftpPassword || "",
+      ftpSecure: !!parsed.ftpSecure,
+      ftpPath: parsed.ftpPath || "",
+      lastBackup: parsed.lastBackup || null,
+      lastFile: parsed.lastFile || null
+    };
   } catch (err) {
     return {
       enabled: false,
       interval: 1440,
       path: "C:/Moksh Software",
+      backupType: "local",
+      ftpHost: "",
+      ftpPort: 21,
+      ftpUser: "",
+      ftpPassword: "",
+      ftpSecure: false,
+      ftpPath: "",
       lastBackup: null,
       lastFile: null
     };
@@ -24,6 +74,43 @@ const readConfig = () => {
 // Helper to write config
 const writeConfig = (config) => {
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+};
+
+// Helper to upload a backup file via FTP
+const uploadBackupToFtp = async (config, filename, sql) => {
+  const client = new ftp.Client();
+  client.ftp.timeout = 15000;
+  try {
+    await client.access({
+      host: config.ftpHost,
+      port: config.ftpPort,
+      user: config.ftpUser || undefined,
+      password: config.ftpPassword || undefined,
+      secure: config.ftpSecure,
+      secureOptions: {
+        rejectUnauthorized: false
+      }
+    });
+
+    if (config.ftpPath) {
+      await client.ensureDir(config.ftpPath);
+    }
+
+    const bufferStream = new stream.PassThrough();
+    bufferStream.end(Buffer.from(sql, 'utf-8'));
+
+    await client.uploadFrom(bufferStream, filename);
+
+    if (config.lastFile) {
+      try {
+        await client.remove(config.lastFile);
+      } catch (delErr) {
+        console.warn(`[Auto-Backup] Could not delete old remote FTP file "${config.lastFile}":`, delErr.message);
+      }
+    }
+  } finally {
+    client.close();
+  }
 };
 
 // Escape helpers for programmatic SQL building
@@ -168,38 +255,76 @@ const generateBackupSql = async () => {
 const ensureAutoBackupFileExists = async () => {
   try {
     const config = readConfig();
-    
-    // Create folder path if it does not exist
-    if (!fs.existsSync(config.path)) {
-      fs.mkdirSync(config.path, { recursive: true });
-    }
+    if (!config.enabled) return;
 
-    let fileExists = false;
-    if (config.lastFile) {
-      const backupFilePath = path.join(config.path, config.lastFile);
-      if (fs.existsSync(backupFilePath)) {
-        fileExists = true;
+    if (config.backupType === 'ftp') {
+      if (config.lastFile) {
+        // Assume remote file exists to speed up server boot
+        return;
       }
-    }
-
-    // If the file is missing or has never been generated, create it right now!
-    if (!fileExists) {
+      
+      console.log(`[Auto-Backup] Startup check: Running initial backup to remote FTP server...`);
       const now = new Date();
       const sql = await generateBackupSql();
       const dateStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
       const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
       const filename = `AutoBackup-${dateStr}--${timeStr}.sql`;
-      const fullPath = path.join(config.path, filename);
+      
+      try {
+        await uploadBackupToFtp(config, filename, sql);
+        console.log(`[Auto-Backup] Startup check: Successfully uploaded initial backup to FTP: ${filename}`);
+        config.lastBackup = now.toISOString();
+        config.lastFile = filename;
+        writeConfig(config);
+      } catch (ftpErr) {
+        console.warn(`[Auto-Backup] Startup check failed to upload to FTP:`, ftpErr.message);
+      }
+    } else {
+      // Local backup verification
+      if (!isValidLocalOrUncPath(config.path)) {
+        console.warn(`[Auto-Backup] Startup check skipped: Backup path "${config.path}" is invalid.`);
+        return;
+      }
 
-      fs.writeFileSync(fullPath, sql, 'utf8');
+      let fileExists = false;
+      if (config.lastFile) {
+        const backupFilePath = path.join(config.path, config.lastFile);
+        if (fs.existsSync(backupFilePath)) {
+          fileExists = true;
+        }
+      }
 
-      // Update configuration details
-      config.lastBackup = now.toISOString();
-      config.lastFile = filename;
-      writeConfig(config);
+      if (!fileExists) {
+        console.log(`[Auto-Backup] Startup check: Initial backup file missing. Generating locally...`);
+        try {
+          if (!fs.existsSync(config.path)) {
+            fs.mkdirSync(config.path, { recursive: true });
+          }
+        } catch (mkdirErr) {
+          console.warn(`[Auto-Backup] Startup check failed to create directory "${config.path}":`, mkdirErr.message);
+          return;
+        }
+
+        const now = new Date();
+        const sql = await generateBackupSql();
+        const dateStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+        const filename = `AutoBackup-${dateStr}--${timeStr}.sql`;
+        const fullPath = path.join(config.path, filename);
+
+        try {
+          fs.writeFileSync(fullPath, sql, 'utf8');
+          console.log(`[Auto-Backup] Startup check: Successfully saved initial backup locally: ${fullPath}`);
+          config.lastBackup = now.toISOString();
+          config.lastFile = filename;
+          writeConfig(config);
+        } catch (writeErr) {
+          console.warn(`[Auto-Backup] Startup check failed to write backup file "${fullPath}":`, writeErr.message);
+        }
+      }
     }
   } catch (err) {
-    console.error('Failed to ensure auto-backup file exists:', err);
+    console.warn('[Auto-Backup] Startup check failed:', err.message);
   }
 };
 
@@ -220,15 +345,59 @@ exports.getBackupConfig = async (req, res) => {
 // POST /api/utility/backup/config
 exports.saveBackupConfig = async (req, res) => {
   try {
-    const { enabled, interval, path: targetPath } = req.body;
+    const { 
+      enabled, 
+      interval, 
+      path: targetPath,
+      backupType,
+      ftpHost,
+      ftpPort,
+      ftpUser,
+      ftpPassword,
+      ftpSecure,
+      ftpPath 
+    } = req.body;
+    
     const current = readConfig();
     current.enabled = !!enabled;
     current.interval = Number(interval) || 1440;
-    if (targetPath) current.path = targetPath;
+    
+    if (backupType) {
+      if (backupType !== 'local' && backupType !== 'ftp') {
+        return res.status(400).json({ error: 'Invalid backup type.' });
+      }
+      current.backupType = backupType;
+    }
+    
+    if (current.backupType === 'local') {
+      if (targetPath) {
+        const trimmedPath = targetPath.trim();
+        if (!trimmedPath) {
+          return res.status(400).json({ error: 'Backup path cannot be empty.' });
+        }
+        if (!isValidLocalOrUncPath(trimmedPath)) {
+          return res.status(400).json({
+            error: 'Invalid backup path. Network URLs (like ftp:// or http://) and special wildcard characters are not supported. Please use a local directory (e.g. C:/Backups) or a network share path (e.g. \\\\192.168.1.1\\share).'
+          });
+        }
+        current.path = trimmedPath;
+      }
+    } else if (current.backupType === 'ftp') {
+      if (!ftpHost || !ftpHost.trim()) {
+        return res.status(400).json({ error: 'FTP Host is required when FTP destination is selected.' });
+      }
+      current.ftpHost = ftpHost.trim();
+      current.ftpPort = Number(ftpPort) || 21;
+      current.ftpUser = (ftpUser || '').trim();
+      current.ftpPassword = ftpPassword || '';
+      current.ftpSecure = !!ftpSecure;
+      current.ftpPath = (ftpPath || '').trim();
+    }
+    
     writeConfig(current);
     res.json(current);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to save backup configuration' });
+    res.status(500).json({ error: 'Failed to save backup configuration.' });
   }
 };
 
@@ -360,37 +529,62 @@ exports.triggerAutoBackupIfNeeded = async () => {
     const elapsedMinutes = config.lastBackup ? (now - new Date(config.lastBackup)) / (1000 * 60) : Infinity;
 
     if (elapsedMinutes >= config.interval) {
-      // Create path if it doesn't exist
-      if (!fs.existsSync(config.path)) {
-        fs.mkdirSync(config.path, { recursive: true });
-      }
-
-      // Safely delete the previous automatic backup file if it exists to preserve disk space
-      if (config.lastFile) {
-        try {
-          const oldPath = path.join(config.path, config.lastFile);
-          if (fs.existsSync(oldPath)) {
-            fs.unlinkSync(oldPath);
-          }
-        } catch (unlinkErr) {
-          console.error('Failed to unlink old auto-backup file:', unlinkErr);
-        }
-      }
-
+      console.log(`[Auto-Backup] Starting background backup (${config.backupType === 'ftp' ? 'FTP remote' : 'Local drive'})...`);
       const sql = await generateBackupSql();
       const dateStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
       const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
       const filename = `AutoBackup-${dateStr}--${timeStr}.sql`;
-      const fullPath = path.join(config.path, filename);
 
-      fs.writeFileSync(fullPath, sql, 'utf8');
+      if (config.backupType === 'ftp') {
+        try {
+          await uploadBackupToFtp(config, filename, sql);
+          console.log(`[Auto-Backup] Successfully uploaded backup to FTP: ${filename}`);
+          config.lastBackup = now.toISOString();
+          config.lastFile = filename;
+          writeConfig(config);
+        } catch (ftpErr) {
+          console.warn(`[Auto-Backup] Failed to upload auto-backup to FTP:`, ftpErr.message);
+        }
+      } else {
+        // Local logic
+        if (!isValidLocalOrUncPath(config.path)) {
+          console.warn(`[Auto-Backup] Skipped: Backup path "${config.path}" is invalid. Please configure a valid local or UNC directory.`);
+          return;
+        }
 
-      // Update config metadata
-      config.lastBackup = now.toISOString();
-      config.lastFile = filename;
-      writeConfig(config);
+        try {
+          if (!fs.existsSync(config.path)) {
+            fs.mkdirSync(config.path, { recursive: true });
+          }
+        } catch (mkdirErr) {
+          console.warn(`[Auto-Backup] Failed to create directory "${config.path}":`, mkdirErr.message);
+          return;
+        }
+
+        if (config.lastFile) {
+          try {
+            const oldPath = path.join(config.path, config.lastFile);
+            if (fs.existsSync(oldPath)) {
+              fs.unlinkSync(oldPath);
+            }
+          } catch (unlinkErr) {
+            console.warn('[Auto-Backup] Failed to unlink old auto-backup file:', unlinkErr.message);
+          }
+        }
+
+        const fullPath = path.join(config.path, filename);
+        try {
+          fs.writeFileSync(fullPath, sql, 'utf8');
+          console.log(`[Auto-Backup] Successfully saved backup locally: ${fullPath}`);
+          config.lastBackup = now.toISOString();
+          config.lastFile = filename;
+          writeConfig(config);
+        } catch (writeErr) {
+          console.warn(`[Auto-Backup] Failed to write backup file "${fullPath}":`, writeErr.message);
+        }
+      }
     }
   } catch (err) {
-    console.error('Background auto-backup failed:', err);
+    console.warn('[Auto-Backup] Background auto-backup failed:', err.message);
   }
 };

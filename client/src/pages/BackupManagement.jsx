@@ -6,7 +6,7 @@ import API_BASE_URL from '../config';
 export default function BackupManagement() {
   const navigate = useNavigate();
   const { setHeaderActions } = useOutletContext();
-  
+
   const [downloading, setDownloading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState({
@@ -35,7 +35,7 @@ export default function BackupManagement() {
   useEffect(() => {
     setHeaderActions?.(() => (
       <div className="flex items-center gap-2">
-        <button 
+        <button
           onClick={fetchConfig}
           className="p-2 hover:bg-[#F1F5F9] rounded-lg text-[#64748B] hover:text-[#0F172A] transition-all"
           title="Refresh Configurations"
@@ -53,7 +53,7 @@ export default function BackupManagement() {
       const resp = await fetch(`${API_BASE_URL}/utility/backup/download`);
       if (!resp.ok) throw new Error('Backup failed');
       const blob = await resp.blob();
-      
+
       const disposition = resp.headers.get('content-disposition');
       let filename = 'HP_Backup.sql';
       if (disposition && disposition.indexOf('attachment') !== -1) {
@@ -63,7 +63,7 @@ export default function BackupManagement() {
           filename = matches[1].replace(/['"]/g, '');
         }
       }
-      
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -80,6 +80,45 @@ export default function BackupManagement() {
   };
 
   const handleSaveConfig = async () => {
+    const isFtp = config.backupType === 'ftp';
+    
+    if (isFtp) {
+      if (!config.ftpHost || !config.ftpHost.trim()) {
+        alert('FTP Host/IP cannot be empty.');
+        return;
+      }
+    } else {
+      const pathStr = (config.path || '').trim();
+      if (!pathStr) {
+        alert('Backup path cannot be empty.');
+        return;
+      }
+
+      if (/^(ftp|http|https|sftp|ftps):/i.test(pathStr)) {
+        alert('Invalid backup path. Network URLs (like ftp:// or http://) are not supported.\n\nPlease use a local directory (e.g. C:/Backups) or a network share path (e.g. \\\\192.168.1.1\\share).');
+        return;
+      }
+
+      const invalidChars = /[*\?"<>|]/;
+      if (invalidChars.test(pathStr)) {
+        alert('Backup path contains invalid characters (e.g. *, ?, ", <, >, |).');
+        return;
+      }
+
+      const colonIndex = pathStr.indexOf(':');
+      if (colonIndex !== -1) {
+        if (colonIndex !== 1 && !(colonIndex === 2 && (pathStr.startsWith('/') || pathStr.startsWith('\\')))) {
+          alert('Backup path contains an invalid colon character. Colons are only allowed for Windows drive letters (e.g. C:).');
+          return;
+        }
+        const driveLetter = pathStr[colonIndex - 1];
+        if (!/^[a-zA-Z]$/.test(driveLetter)) {
+          alert('Backup path contains an invalid drive letter.');
+          return;
+        }
+      }
+    }
+
     try {
       setSaving(true);
       const resp = await fetch(`${API_BASE_URL}/utility/backup/config`, {
@@ -91,7 +130,8 @@ export default function BackupManagement() {
         alert('Configuration saved successfully!');
         fetchConfig();
       } else {
-        alert('Failed to save configuration');
+        const errJson = await resp.json().catch(() => ({}));
+        alert(errJson.error || 'Failed to save configuration');
       }
     } catch (err) {
       console.error(err);
@@ -119,7 +159,7 @@ export default function BackupManagement() {
       {/* ── Page Toolbar ── */}
       <div className="flex-none bg-white border-b border-[#E2E8F0] px-6 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={() => navigate('/utility')}
             className="p-2 hover:bg-[#F1F5F9] rounded-lg text-[#64748B] hover:text-[#0F172A] transition-all"
           >
@@ -183,14 +223,12 @@ export default function BackupManagement() {
               </div>
               <button
                 onClick={() => setConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
-                className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 focus:outline-none flex items-center ${
-                  config.enabled ? 'bg-[#2563EB]' : 'bg-[#CBD5E1]'
-                }`}
+                className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 focus:outline-none flex items-center ${config.enabled ? 'bg-[#2563EB]' : 'bg-[#CBD5E1]'
+                  }`}
               >
                 <div
-                  className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${
-                    config.enabled ? 'translate-x-6' : 'translate-x-0'
-                  }`}
+                  className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${config.enabled ? 'translate-x-6' : 'translate-x-0'
+                    }`}
                 />
               </button>
             </div>
@@ -209,18 +247,129 @@ export default function BackupManagement() {
               </div>
             </div>
 
-            {/* Path */}
+            {/* Backup Type Selector */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-[#475569] uppercase tracking-wider">Local Backup Path (Server Machine)</label>
-              <input
-                type="text"
-                value={config.path}
-                onChange={e => setConfig(prev => ({ ...prev, path: e.target.value }))}
-                className="w-full px-4 py-2.5 bg-white border border-[#CBD5E1] rounded-xl text-sm font-semibold text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-colors"
-                placeholder="C:/Moksh Software"
-              />
-              <span className="text-[11px] text-[#64748B] -mt-0.5">Note: The server will attempt to create this folder if it doesn't exist.</span>
+              <label className="text-xs font-bold text-[#475569] uppercase tracking-wider">Backup Destination</label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setConfig(prev => ({ ...prev, backupType: 'local' }))}
+                  className={`p-4 rounded-xl border-2 text-left transition-all ${
+                    config.backupType === 'local'
+                      ? 'border-[#2563EB] bg-blue-50/20'
+                      : 'border-[#E2E8F0] hover:border-[#CBD5E1]'
+                  }`}
+                >
+                  <span className="block text-sm font-bold text-[#0F172A]">Local Server Storage</span>
+                  <span className="block text-xs text-[#64748B] mt-0.5">Save to a local folder or UNC network share</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfig(prev => ({ ...prev, backupType: 'ftp' }))}
+                  className={`p-4 rounded-xl border-2 text-left transition-all ${
+                    config.backupType === 'ftp'
+                      ? 'border-[#2563EB] bg-blue-50/20'
+                      : 'border-[#E2E8F0] hover:border-[#CBD5E1]'
+                  }`}
+                >
+                  <span className="block text-sm font-bold text-[#0F172A]">Remote FTP Server</span>
+                  <span className="block text-xs text-[#64748B] mt-0.5">Upload automatically to a remote FTP/FTPS host</span>
+                </button>
+              </div>
             </div>
+
+            {config.backupType === 'ftp' ? (
+              <div className="flex flex-col gap-4 border border-[#E2E8F0] p-5 rounded-xl bg-slate-50/30">
+                <span className="text-xs font-bold text-[#475569] uppercase tracking-wider -mb-1 block">FTP Server Credentials</span>
+                
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2 flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-[#64748B]">FTP Host / IP</label>
+                    <input
+                      type="text"
+                      value={config.ftpHost || ''}
+                      onChange={e => setConfig(prev => ({ ...prev, ftpHost: e.target.value }))}
+                      className="px-3 py-2 bg-white border border-[#CBD5E1] rounded-lg text-xs font-semibold text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-colors"
+                      placeholder="e.g. 192.168.1.1"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-[#64748B]">Port</label>
+                    <input
+                      type="number"
+                      value={config.ftpPort || 21}
+                      onChange={e => setConfig(prev => ({ ...prev, ftpPort: Number(e.target.value) }))}
+                      className="px-3 py-2 bg-white border border-[#CBD5E1] rounded-lg text-xs font-semibold text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-colors"
+                      placeholder="21"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-[#64748B]">Username</label>
+                    <input
+                      type="text"
+                      value={config.ftpUser || ''}
+                      onChange={e => setConfig(prev => ({ ...prev, ftpUser: e.target.value }))}
+                      className="px-3 py-2 bg-white border border-[#CBD5E1] rounded-lg text-xs font-semibold text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-colors"
+                      placeholder="Anonymous / User"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-[#64748B]">Password</label>
+                    <input
+                      type="password"
+                      value={config.ftpPassword || ''}
+                      onChange={e => setConfig(prev => ({ ...prev, ftpPassword: e.target.value }))}
+                      className="px-3 py-2 bg-white border border-[#CBD5E1] rounded-lg text-xs font-semibold text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-colors"
+                      placeholder="Password"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 items-end">
+                  <div className="col-span-2 flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-[#64748B]">Remote Directory Path</label>
+                    <input
+                      type="text"
+                      value={config.ftpPath || ''}
+                      onChange={e => setConfig(prev => ({ ...prev, ftpPath: e.target.value }))}
+                      className="px-3 py-2 bg-white border border-[#CBD5E1] rounded-lg text-xs font-semibold text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-colors"
+                      placeholder="e.g. /usb1_1_1/entry"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-2 bg-white border border-[#CBD5E1] rounded-lg h-[34px]">
+                    <span className="text-[10px] font-bold text-[#64748B]">FTPS (TLS)</span>
+                    <button
+                      type="button"
+                      onClick={() => setConfig(prev => ({ ...prev, ftpSecure: !prev.ftpSecure }))}
+                      className={`w-8 h-4 rounded-full p-0.5 transition-colors duration-200 focus:outline-none flex items-center ${
+                        config.ftpSecure ? 'bg-[#2563EB]' : 'bg-[#CBD5E1]'
+                      }`}
+                    >
+                      <div
+                        className={`w-3 h-3 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${
+                          config.ftpSecure ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-[#475569] uppercase tracking-wider">Local Backup Path (Server Machine)</label>
+                <input
+                  type="text"
+                  value={config.path}
+                  onChange={e => setConfig(prev => ({ ...prev, path: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-white border border-[#CBD5E1] rounded-xl text-sm font-semibold text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-colors"
+                  placeholder="C:/Moksh Software"
+                />
+                <span className="text-[11px] text-[#64748B] -mt-0.5">Note: The server will attempt to create this folder if it doesn't exist.</span>
+              </div>
+            )}
 
             {/* Last Backup Details */}
             <div className="grid grid-cols-2 gap-4 mt-2">

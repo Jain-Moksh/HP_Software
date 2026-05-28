@@ -1,1 +1,1 @@
-cd client && npm i && npm run build && cd .. && cd server && npm i && npm start
+cd "C:\Users\Hemant Plast\Documents\GitHub\HP_Accounting_Software" && cd client && npm i && npm run build && cd .. && cd server && npm i && npm start
