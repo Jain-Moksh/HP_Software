@@ -328,6 +328,9 @@ export default function DataTable({
   const [activeMonth, setActiveMonth]   = useState(currentMonth);
   const [rows, setRows]                 = useState(initialData);
   const [editingId, setEditingId]       = useState(null);
+
+  // Helper to generate a globally unique ID for UI state (solves collisions between IN and ADJ tables)
+  const getUniqueId = (r) => (r.tx_type ? `${r.tx_type}-${r.id}` : r.id);
   const [draft, setDraft]               = useState(null);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, rowId: null, tx_type: null }); // Added deleteModal state
 
@@ -338,7 +341,7 @@ export default function DataTable({
     // Auto-edit draft rows (like the new adjustment row)
     const draftRow = initialData.find(r => r.isDraft);
     if (draftRow) {
-      setEditingId(draftRow.id);
+      setEditingId(getUniqueId(draftRow));
       setDraft({ ...draftRow });
     }
   }, [initialData]);
@@ -386,21 +389,21 @@ export default function DataTable({
 
   // ── checkbox toggle helper ────────────────────────────────────────────
   const toggleCheckbox = (row, field) => {
-    if (editingId === row.id) {
+    if (editingId === getUniqueId(row)) {
       setField(field, !draft[field]);
     } else {
       let updatedRow = { ...row, [field]: !row[field] };
       if (calculateFields && checkboxRecalcFields.includes(field)) {
         updatedRow = calculateFields(updatedRow, field);
       }
-      setRows(prev => prev.map(r => r.id === row.id ? updatedRow : r));
+      setRows(prev => prev.map(r => getUniqueId(r) === getUniqueId(row) ? updatedRow : r));
       saveRow(updatedRow);
     }
   };
 
   // ── start editing ─────────────────────────────────────────────────────
   const startEdit = (row) => {
-    setEditingId(row.id);
+    setEditingId(getUniqueId(row));
     setDraft({ ...row });
   };
 
@@ -414,7 +417,7 @@ export default function DataTable({
         saved[col.key] = Number(saved[col.key]) || 0;
       }
     });
-    setRows(prev => prev.map(r => r.id === saved.id ? saved : r));
+    setRows(prev => prev.map(r => getUniqueId(r) === getUniqueId(saved) ? saved : r));
     if (onSave) {
       onSave(saved);
     }
@@ -658,7 +661,8 @@ export default function DataTable({
 
           <tbody>
             {filteredRows.map((row, idx) => {
-              const isEditing = editingId === row.id;
+              const uniqueRowId = getUniqueId(row);
+              const isEditing = editingId === uniqueRowId;
               const rowCls = `border-b border-[#E2E8F0] transition-colors ${
                 row.isTotal
                   ? 'bg-slate-50 font-bold'
@@ -671,7 +675,7 @@ export default function DataTable({
 
               return (
                 <tr
-                  key={row.id}
+                  key={uniqueRowId}
                   ref={isEditing ? editRowRef : null}
                   className={rowCls}
                 >
