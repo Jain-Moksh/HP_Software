@@ -47,10 +47,6 @@ exports.createTransfer = async (req, res) => {
     const t1 = Number(type1) || 0;
     const t2 = Number(type2) || 0;
 
-    if (t1 <= 0 && t2 <= 0) {
-        return res.status(400).json({ error: 'At least one quantity (Type 1 or Type 2) must be greater than zero' });
-    }
-
     if (t1 < 0 || t2 < 0) {
         return res.status(400).json({ error: 'Quantity cannot be negative' });
     }
@@ -110,10 +106,6 @@ exports.updateTransfer = async (req, res) => {
 
     const t1 = Number(type1) || 0;
     const t2 = Number(type2) || 0;
-
-    if (t1 <= 0 && t2 <= 0) {
-        return res.status(400).json({ error: 'At least one quantity (Type 1 or Type 2) must be greater than zero' });
-    }
 
     if (t1 < 0 || t2 < 0) {
         return res.status(400).json({ error: 'Quantity cannot be negative' });

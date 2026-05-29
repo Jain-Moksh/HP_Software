@@ -185,11 +185,7 @@ export default function MaterialTransfer() {
 
   const handleSave = async () => {
     try {
-      // Validation: Quantities, jobber match, required fields
-      if (!(newRow.type1 || newRow.type2)) {
-        alert('Please enter either Type 1 or Type 2 quantity');
-        return;
-      }
+      // Validation: Jobber match, required fields
       if (!newRow.material || !newRow.from_jobber || !newRow.to_jobber || !newRow.date) {
         alert('Material, From Jobber, To Jobber, and Date are mandatory');
         return;
