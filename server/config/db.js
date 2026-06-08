@@ -1,4 +1,5 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+types.setTypeParser(1082, (val) => val); // 1082 is the OID for DATE type
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();

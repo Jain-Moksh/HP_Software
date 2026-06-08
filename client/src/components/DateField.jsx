@@ -22,7 +22,8 @@ export default function DateField({ value, onChange, field, onKeyDown, className
       setDisplay('');
       return;
     }
-    const parts = value.split('-');
+    const dateOnly = value.includes('T') ? value.split('T')[0] : value;
+    const parts = dateOnly.split('-');
     if (parts.length === 3) {
       const [, m, d] = parts;
       setDisplay(`${d}/${m}`);

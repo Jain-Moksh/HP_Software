@@ -19,15 +19,35 @@ const COLUMNS = [
   { key: 'remark',   label: 'Remark',    type: 'text', minWidth: '160px' },
 ];
 
+const getLocalDateParts = (dateStr) => {
+  if (!dateStr) {
+    const d = new Date();
+    return { month: d.getMonth(), year: d.getFullYear(), day: d.getDate() };
+  }
+  if (typeof dateStr === 'string') {
+    const dateOnly = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+    const parts = dateOnly.split('-');
+    if (parts.length === 3) {
+      return {
+        year: parseInt(parts[0], 10),
+        month: parseInt(parts[1], 10) - 1, // 0-indexed
+        day: parseInt(parts[2], 10)
+      };
+    }
+  }
+  const d = new Date(dateStr);
+  return { month: d.getMonth(), year: d.getFullYear(), day: d.getDate() };
+};
+
 const prepareTableData = (data, month, year, showDraftAdj = false) => {
   if (!data && !showDraftAdj) return [];
 
   const allProcessed = (data || []).map(item => {
-    const d = item.date ? new Date(item.date) : new Date();
+    const dateParts = getLocalDateParts(item.date);
     return {
       ...item,
-      _month: item._month ?? d.getMonth(),
-      _year: item._year ?? d.getFullYear()
+      _month: item._month ?? dateParts.month,
+      _year: item._year ?? dateParts.year
     };
   });
 
@@ -305,9 +325,9 @@ export default function SellerReportDetail() {
 
   // Calculate Dynamic Opening/Closing Financial Balances (Amounts)
   const openingAmount = transactions.reduce((acc, tx) => {
-    const d = new Date(tx.date);
-    const m = d.getMonth();
-    const y = d.getFullYear();
+    const dateParts = getLocalDateParts(tx.date);
+    const m = dateParts.month;
+    const y = dateParts.year;
     if (y < selectedYear || (y === selectedYear && m < activeMonth)) {
       if (tx.tx_type === 'IN') {
         acc += (Number(tx.amount) || 0);
@@ -319,9 +339,9 @@ export default function SellerReportDetail() {
   }, 0);
 
   const currentNetAmount = transactions.reduce((acc, tx) => {
-    const d = new Date(tx.date);
-    const m = d.getMonth();
-    const y = d.getFullYear();
+    const dateParts = getLocalDateParts(tx.date);
+    const m = dateParts.month;
+    const y = dateParts.year;
     if (y === selectedYear && m === activeMonth) {
       if (tx.tx_type === 'IN') {
         acc += (Number(tx.amount) || 0);
@@ -394,8 +414,8 @@ export default function SellerReportDetail() {
               </button>
               <span className="text-[10px] font-bold text-[#64748B] bg-white px-2 py-0.5 rounded border border-[#E2E8F0]">
                 {transactions.filter(r => {
-                   const d = new Date(r.date);
-                   return d.getMonth() === activeMonth && d.getFullYear() === selectedYear;
+                   const dateParts = getLocalDateParts(r.date);
+                   return dateParts.month === activeMonth && dateParts.year === selectedYear;
                  }).length} Records
               </span>
             </div>

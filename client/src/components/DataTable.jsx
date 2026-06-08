@@ -11,6 +11,14 @@ const MONTHS = [
 // ─── formatters ──────────────────────────────────────────────────────────────
 const formatDate = (dateStr) => {
   if (!dateStr) return '';
+  if (typeof dateStr === 'string') {
+    const dateOnly = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+    const parts = dateOnly.split('-');
+    if (parts.length === 3) {
+      const [year, month, day] = parts;
+      return `${day}/${month}/${year}`;
+    }
+  }
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   const day = String(d.getDate()).padStart(2, '0');
