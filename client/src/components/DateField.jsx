@@ -22,8 +22,16 @@ export default function DateField({ value, onChange, field, onKeyDown, className
       setDisplay('');
       return;
     }
-    const dateOnly = value.includes('T') ? value.split('T')[0] : value;
-    const parts = dateOnly.split('-');
+    if (value.includes('T')) {
+      const d = new Date(value);
+      if (!isNaN(d.getTime())) {
+        const dayStr = String(d.getDate()).padStart(2, '0');
+        const monStr = String(d.getMonth() + 1).padStart(2, '0');
+        setDisplay(`${dayStr}/${monStr}`);
+        return;
+      }
+    }
+    const parts = value.split('-');
     if (parts.length === 3) {
       const [, m, d] = parts;
       setDisplay(`${d}/${m}`);

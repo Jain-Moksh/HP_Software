@@ -138,116 +138,153 @@ const escapeSqlDateOnly = (val) => {
 const generateBackupSql = async () => {
   const sqlParts = [];
 
-  // Disable triggers / start cascade reset
   sqlParts.push(`-- HP Accounting Software Programmatic Backup\n`);
   sqlParts.push(`-- Generated: ${new Date().toLocaleString()}\n\n`);
   sqlParts.push(`BEGIN;\n\n`);
-  sqlParts.push(`TRUNCATE TABLE seller_adjustments, jobber_adjustments, material_transfers, transactions_out, transactions_in, vendors, sellers, jobbers, items RESTART IDENTITY CASCADE;\n\n`);
 
-  // 0. items
-  const items = await db.query('SELECT * FROM items ORDER BY id');
-  if (items.rows.length > 0) {
-    sqlParts.push(`-- Dumping items\n`);
-    for (const r of items.rows) {
-      sqlParts.push(`INSERT INTO items (id, item_name, description, job_rate, weight_type1, weight_type2, created_at, updated_at) VALUES (${r.id}, ${escapeSqlStr(r.item_name)}, ${escapeSqlStr(r.description)}, ${r.job_rate || 0}, ${r.weight_type1 || 0}, ${r.weight_type2 || 0}, ${escapeSqlDate(r.created_at)}, ${escapeSqlDate(r.updated_at)});\n`);
+  const knownTables = [
+    'items', 'jobbers', 'sellers', 'vendors', 'transactions_in', 
+    'transactions_out', 'jobber_adjustments', 'seller_adjustments', 'material_transfers'
+  ];
+
+  const tableRes = await db.query(`
+    SELECT table_name 
+    FROM information_schema.tables 
+    WHERE table_schema = 'public' 
+      AND table_type = 'BASE TABLE'
+  `);
+  const dbTables = tableRes.rows.map(r => r.table_name);
+
+  const existingKnown = knownTables.filter(t => dbTables.includes(t));
+  const extraTables = dbTables.filter(t => !knownTables.includes(t));
+  const finalTables = [...existingKnown, ...extraTables];
+
+  if (finalTables.length > 0) {
+    // 1. Generate CREATE TABLE statements for all tables first
+    sqlParts.push(`-- Creating Tables\n`);
+    for (const tableName of finalTables) {
+      const colRes = await db.query(`
+        SELECT column_name, data_type, character_maximum_length, is_nullable, column_default
+        FROM information_schema.columns 
+        WHERE table_name = $1 
+        ORDER BY ordinal_position
+      `, [tableName]);
+      
+      if (colRes.rows.length === 0) continue;
+
+      const ddlParts = [];
+      for (const col of colRes.rows) {
+        let isSerial = false;
+        let typeStr = col.data_type.toUpperCase();
+        
+        if (col.column_default && col.column_default.includes('nextval')) {
+          isSerial = true;
+          if (typeStr.includes('BIGINT')) {
+            typeStr = 'BIGSERIAL';
+          } else if (typeStr.includes('SMALLINT')) {
+            typeStr = 'SMALLSERIAL';
+          } else {
+            typeStr = 'SERIAL';
+          }
+        }
+
+        let def = `"${col.column_name}" ${typeStr}`;
+        if (col.character_maximum_length) {
+          def += `(${col.character_maximum_length})`;
+        }
+        if (col.column_default && !isSerial) {
+          def += ` DEFAULT ${col.column_default}`;
+        }
+        if (col.is_nullable === 'NO' && !isSerial) {
+          def += ' NOT NULL';
+        }
+        ddlParts.push(def);
+      }
+
+      // Add Primary Key constraint if exists
+      const pkRes = await db.query(`
+        SELECT kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+          AND tc.table_schema = kcu.table_schema
+        WHERE tc.constraint_type = 'PRIMARY KEY'
+          AND tc.table_name = $1
+      `, [tableName]);
+      
+      if (pkRes.rows.length > 0) {
+        const pkCols = pkRes.rows.map(r => `"${r.column_name}"`).join(', ');
+        ddlParts.push(`PRIMARY KEY (${pkCols})`);
+      }
+
+      sqlParts.push(`CREATE TABLE IF NOT EXISTS "${tableName}" (\n  ${ddlParts.join(',\n  ')}\n);\n\n`);
     }
-    sqlParts.push(`\n`);
+
+    // 2. Wiping existing data
+    sqlParts.push(`TRUNCATE TABLE ${finalTables.map(t => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE;\n\n`);
+    
+    // 3. Inserting table data
+    for (const tableName of finalTables) {
+      const colRes = await db.query(`
+        SELECT column_name, data_type 
+        FROM information_schema.columns 
+        WHERE table_name = $1 
+        ORDER BY ordinal_position
+      `, [tableName]);
+      
+      if (colRes.rows.length === 0) continue;
+
+      const columns = colRes.rows.map(r => `"${r.column_name}"`);
+      const hasId = colRes.rows.some(r => r.column_name === 'id');
+      const query = hasId ? `SELECT * FROM "${tableName}" ORDER BY id` : `SELECT * FROM "${tableName}"`;
+      
+      const dataRes = await db.query(query);
+      if (dataRes.rows.length === 0) continue;
+
+      sqlParts.push(`-- Dumping ${tableName}\n`);
+      for (const r of dataRes.rows) {
+        const vals = colRes.rows.map(col => {
+          const val = r[col.column_name];
+          if (val === null || val === undefined) return 'NULL';
+          
+          const type = col.data_type.toLowerCase();
+          if (type.includes('int') || type.includes('num') || type.includes('double') || type.includes('real')) {
+            return Number(val);
+          } else if (type.includes('bool')) {
+            return val ? 'true' : 'false';
+          } else if (type.includes('date')) {
+            const d = new Date(val);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const dateVal = String(d.getDate()).padStart(2, '0');
+            return `'${y}-${m}-${dateVal}'`;
+          } else if (type.includes('time') || type.includes('timestamp')) {
+            return `'${new Date(val).toISOString()}'`;
+          } else {
+            return `'${val.toString().replace(/'/g, "''")}'`;
+          }
+        });
+        
+        sqlParts.push(`INSERT INTO "${tableName}" (${columns.join(', ')}) VALUES (${vals.join(', ')});\n`);
+      }
+      sqlParts.push(`\n`);
+    }
+
+    sqlParts.push(`-- Resetting Sequences\n`);
+    for (const tableName of finalTables) {
+      sqlParts.push(`DO $$
+DECLARE
+  seq_name text;
+BEGIN
+  SELECT pg_get_serial_sequence('"${tableName}"', 'id') INTO seq_name;
+  IF seq_name IS NOT NULL THEN
+    EXECUTE 'SELECT setval(' || quote_literal(seq_name) || ', COALESCE(MAX(id), 1)) FROM "${tableName}"';
+  END IF;
+END $$;\n`);
+    }
   }
 
-  // 1. jobbers
-  const jobbers = await db.query('SELECT * FROM jobbers ORDER BY id');
-  if (jobbers.rows.length > 0) {
-    sqlParts.push(`-- Dumping jobbers\n`);
-    for (const r of jobbers.rows) {
-      sqlParts.push(`INSERT INTO jobbers (id, name, opening_stock_type1, opening_stock_type2, opening_amount, created_at) VALUES (${r.id}, ${escapeSqlStr(r.name)}, ${r.opening_stock_type1 || 0}, ${r.opening_stock_type2 || 0}, ${r.opening_amount || 0}, ${escapeSqlDate(r.created_at)});\n`);
-    }
-    sqlParts.push(`\n`);
-  }
-
-  // 2. sellers
-  const sellers = await db.query('SELECT * FROM sellers ORDER BY id');
-  if (sellers.rows.length > 0) {
-    sqlParts.push(`-- Dumping sellers\n`);
-    for (const r of sellers.rows) {
-      sqlParts.push(`INSERT INTO sellers (id, name, created_at) VALUES (${r.id}, ${escapeSqlStr(r.name)}, ${escapeSqlDate(r.created_at)});\n`);
-    }
-    sqlParts.push(`\n`);
-  }
-
-  // 3. vendors
-  const vendors = await db.query('SELECT * FROM vendors ORDER BY id');
-  if (vendors.rows.length > 0) {
-    sqlParts.push(`-- Dumping vendors\n`);
-    for (const r of vendors.rows) {
-      sqlParts.push(`INSERT INTO vendors (id, name, created_at) VALUES (${r.id}, ${escapeSqlStr(r.name)}, ${escapeSqlDate(r.created_at)});\n`);
-    }
-    sqlParts.push(`\n`);
-  }
-
-  // 4. transactions_in
-  const txIn = await db.query('SELECT * FROM transactions_in ORDER BY id');
-  if (txIn.rows.length > 0) {
-    sqlParts.push(`-- Dumping transactions_in\n`);
-    for (const r of txIn.rows) {
-      sqlParts.push(`INSERT INTO transactions_in (id, jobber_id, seller_id, type1, type2, material, rate, amount, date, remark, w, b, a, created_at) VALUES (${r.id}, ${r.jobber_id || 'NULL'}, ${r.seller_id || 'NULL'}, ${r.type1 || 0}, ${r.type2 || 0}, ${escapeSqlStr(r.material)}, ${r.rate || 0}, ${r.amount || 0}, ${escapeSqlDateOnly(r.date)}, ${escapeSqlStr(r.remark)}, ${r.w || false}, ${r.b || false}, ${r.a || false}, ${escapeSqlDate(r.created_at)});\n`);
-    }
-    sqlParts.push(`\n`);
-  }
-
-  // 5. transactions_out
-  const txOut = await db.query('SELECT * FROM transactions_out ORDER BY id');
-  if (txOut.rows.length > 0) {
-    sqlParts.push(`-- Dumping transactions_out\n`);
-    for (const r of txOut.rows) {
-      sqlParts.push(`INSERT INTO transactions_out (id, jobber_id, vendor_id, type1, type2, material, rate, amount, date, remark, w, b, a, created_at) VALUES (${r.id}, ${r.jobber_id || 'NULL'}, ${r.vendor_id || 'NULL'}, ${r.type1 || 0}, ${r.type2 || 0}, ${escapeSqlStr(r.material)}, ${r.rate || 0}, ${r.amount || 0}, ${escapeSqlDateOnly(r.date)}, ${escapeSqlStr(r.remark)}, ${r.w || false}, ${r.b || false}, ${r.a || false}, ${escapeSqlDate(r.created_at)});\n`);
-    }
-    sqlParts.push(`\n`);
-  }
-
-  // 6. jobber_adjustments
-  const jobberAdj = await db.query('SELECT * FROM jobber_adjustments ORDER BY id');
-  if (jobberAdj.rows.length > 0) {
-    sqlParts.push(`-- Dumping jobber_adjustments\n`);
-    for (const r of jobberAdj.rows) {
-      sqlParts.push(`INSERT INTO jobber_adjustments (id, jobber_id, amount, date, remark, created_at) VALUES (${r.id}, ${r.jobber_id || 'NULL'}, ${r.amount || 0}, ${escapeSqlDateOnly(r.date)}, ${escapeSqlStr(r.remark)}, ${escapeSqlDate(r.created_at)});\n`);
-    }
-    sqlParts.push(`\n`);
-  }
-
-  // 7. seller_adjustments
-  const sellerAdj = await db.query('SELECT * FROM seller_adjustments ORDER BY id');
-  if (sellerAdj.rows.length > 0) {
-    sqlParts.push(`-- Dumping seller_adjustments\n`);
-    for (const r of sellerAdj.rows) {
-      sqlParts.push(`INSERT INTO seller_adjustments (id, seller_id, amount, date, remark, created_at) VALUES (${r.id}, ${r.seller_id || 'NULL'}, ${r.amount || 0}, ${escapeSqlDateOnly(r.date)}, ${escapeSqlStr(r.remark)}, ${escapeSqlDate(r.created_at)});\n`);
-    }
-    sqlParts.push(`\n`);
-  }
-
-  // 8. material_transfers
-  const transfers = await db.query('SELECT * FROM material_transfers ORDER BY id');
-  if (transfers.rows.length > 0) {
-    sqlParts.push(`-- Dumping material_transfers\n`);
-    for (const r of transfers.rows) {
-      sqlParts.push(`INSERT INTO material_transfers (id, from_jobber_id, to_jobber_id, type1, type2, material, date, remark, created_at) VALUES (${r.id}, ${r.from_jobber_id || 'NULL'}, ${r.to_jobber_id || 'NULL'}, ${r.type1 || 0}, ${r.type2 || 0}, ${escapeSqlStr(r.material)}, ${escapeSqlDateOnly(r.date)}, ${escapeSqlStr(r.remark)}, ${escapeSqlDate(r.created_at)});\n`);
-    }
-    sqlParts.push(`\n`);
-  }
-
-  // Reset Sequences
-  sqlParts.push(`-- Resetting Sequences\n`);
-  sqlParts.push(`SELECT setval(pg_get_serial_sequence('items', 'id'), COALESCE(MAX(id), 1)) FROM items;\n`);
-  sqlParts.push(`SELECT setval(pg_get_serial_sequence('jobbers', 'id'), COALESCE(MAX(id), 1)) FROM jobbers;\n`);
-  sqlParts.push(`SELECT setval(pg_get_serial_sequence('sellers', 'id'), COALESCE(MAX(id), 1)) FROM sellers;\n`);
-  sqlParts.push(`SELECT setval(pg_get_serial_sequence('vendors', 'id'), COALESCE(MAX(id), 1)) FROM vendors;\n`);
-  sqlParts.push(`SELECT setval(pg_get_serial_sequence('transactions_in', 'id'), COALESCE(MAX(id), 1)) FROM transactions_in;\n`);
-  sqlParts.push(`SELECT setval(pg_get_serial_sequence('transactions_out', 'id'), COALESCE(MAX(id), 1)) FROM transactions_out;\n`);
-  sqlParts.push(`SELECT setval(pg_get_serial_sequence('jobber_adjustments', 'id'), COALESCE(MAX(id), 1)) FROM jobber_adjustments;\n`);
-  sqlParts.push(`SELECT setval(pg_get_serial_sequence('seller_adjustments', 'id'), COALESCE(MAX(id), 1)) FROM seller_adjustments;\n`);
-  sqlParts.push(`SELECT setval(pg_get_serial_sequence('material_transfers', 'id'), COALESCE(MAX(id), 1)) FROM material_transfers;\n\n`);
-
-  sqlParts.push(`COMMIT;\n`);
-
+  sqlParts.push(`\nCOMMIT;\n`);
   return sqlParts.join('');
 };
 
@@ -429,7 +466,7 @@ exports.restoreBackup = async (req, res) => {
 
     const dbName = process.env.DB_NAME || 'hp';
 
-    // 1. Connect to default 'postgres' database to check/create the target database dynamically
+    // 1. Force drop and recreate database
     const tempPool = new Pool({
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
@@ -439,30 +476,39 @@ exports.restoreBackup = async (req, res) => {
     });
 
     try {
-      const dbCheck = await tempPool.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbName]);
-      if (dbCheck.rows.length === 0) {
-        console.log(`Database "${dbName}" does not exist. Creating database during restore request...`);
-        await tempPool.query(`CREATE DATABASE "${dbName}"`);
-        console.log(`✅ Database "${dbName}" created successfully.`);
+      // Terminate any active connections to the database
+      await tempPool.query(`
+        SELECT pg_terminate_backend(pg_stat_activity.pid)
+        FROM pg_stat_activity
+        WHERE pg_stat_activity.datname = $1
+          AND pid <> pg_backend_pid()
+      `, [dbName]);
 
-        // Since the database was just created from scratch, let's initialize all table structures from schema.sql first!
-        const schemaPath = path.join(__dirname, '..', 'schema.sql');
-        if (fs.existsSync(schemaPath)) {
-          const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-          const newDbPool = new Pool({
-            user: process.env.DB_USER,
-            password: process.env.DB_PASSWORD,
-            host: process.env.DB_HOST,
-            port: process.env.DB_PORT,
-            database: dbName,
-          });
-          await newDbPool.query(schemaSql);
-          await newDbPool.end();
-          console.log(`✅ Initialized clean schema migrations successfully.`);
-        }
+      // Drop database
+      await tempPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+      
+      // Create database
+      await tempPool.query(`CREATE DATABASE "${dbName}"`);
+      console.log(`✅ Database "${dbName}" recreated successfully during restore.`);
+
+      // Initialize clean schema
+      const schemaPath = path.join(__dirname, '..', 'schema.sql');
+      if (fs.existsSync(schemaPath)) {
+        const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+        const newDbPool = new Pool({
+          user: process.env.DB_USER,
+          password: process.env.DB_PASSWORD,
+          host: process.env.DB_HOST,
+          port: process.env.DB_PORT,
+          database: dbName,
+        });
+        await newDbPool.query(schemaSql);
+        await newDbPool.end();
+        console.log(`✅ Initialized clean schema migrations successfully.`);
       }
     } catch (dbErr) {
-      console.error('Failed to verify/create database dynamically on restore:', dbErr);
+      console.error('Failed to recreate database on restore:', dbErr);
+      throw dbErr;
     } finally {
       await tempPool.end();
     }
@@ -502,9 +548,17 @@ exports.restoreBackup = async (req, res) => {
     }
 
     // 4. Wipe existing data to ensure we create a new database state instead of merging
-    const tablesToWipe = ['seller_adjustments', 'jobber_adjustments', 'material_transfers', 'transactions_out', 'transactions_in', 'vendors', 'sellers', 'jobbers', 'items'];
     try {
-      await db.query(`TRUNCATE TABLE ${tablesToWipe.join(', ')} RESTART IDENTITY CASCADE;`);
+      const tableListRes = await db.query(`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+          AND table_type = 'BASE TABLE'
+      `);
+      const tablesToWipe = tableListRes.rows.map(r => `"${r.table_name}"`);
+      if (tablesToWipe.length > 0) {
+        await db.query(`TRUNCATE TABLE ${tablesToWipe.join(', ')} RESTART IDENTITY CASCADE;`);
+      }
     } catch (err) {
       console.warn('Could not truncate all tables before restore:', err.message);
     }

@@ -8,12 +8,19 @@ const MONTHS = [
   'July','August','September','October','November','December',
 ];
 
-// ─── formatters ──────────────────────────────────────────────────────────────
 const formatDate = (dateStr) => {
   if (!dateStr) return '';
   if (typeof dateStr === 'string') {
-    const dateOnly = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
-    const parts = dateOnly.split('-');
+    if (dateStr.includes('T')) {
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) {
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+    }
+    const parts = dateStr.split('-');
     if (parts.length === 3) {
       const [year, month, day] = parts;
       return `${day}/${month}/${year}`;
@@ -695,7 +702,7 @@ export default function DataTable({
                   {/* Actions */}
                   <td className="px-3 py-1.5 border-r border-[#E2E8F0] whitespace-nowrap text-center w-[80px]">
                     {row.isTotal ? (
-                      <span className="font-bold text-[#0F172A] text-xs">TOTAL</span>
+                      <span className="font-bold text-[#0F172A] text-xs">{row.actionLabel || 'TOTAL'}</span>
                     ) : (
                       <div className="flex items-center justify-center gap-1.5">
                         {isEditing ? (

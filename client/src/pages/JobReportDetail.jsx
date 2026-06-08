@@ -33,14 +33,31 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+const toLocalYYYYMMDD = (dateVal) => {
+  if (!dateVal) return '';
+  if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
+    return dateVal;
+  }
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dateStr = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dateStr}`;
+};
+
+const getLocalTodayString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const getLocalDateParts = (dateStr) => {
   if (!dateStr) {
     const d = new Date();
     return { month: d.getMonth(), year: d.getFullYear(), day: d.getDate() };
   }
-  if (typeof dateStr === 'string') {
-    const dateOnly = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
-    const parts = dateOnly.split('-');
+  if (typeof dateStr === 'string' && !dateStr.includes('T')) {
+    const parts = dateStr.split('-');
     if (parts.length === 3) {
       return {
         year: parseInt(parts[0], 10),
@@ -53,7 +70,7 @@ const getLocalDateParts = (dateStr) => {
   return { month: d.getMonth(), year: d.getFullYear(), day: d.getDate() };
 };
 
-const prepareTableData = (data, month, year) => {
+const prepareTableData = (data, month, year, openingStock = null, txType = 'IN') => {
   if (!data) return [];
   
   const allProcessed = (data || []).map(item => {
@@ -100,6 +117,46 @@ const prepareTableData = (data, month, year) => {
     isTotalHeader: true // to distinguish if needed
   });
 
+  if (openingStock) {
+    const isOut = txType === 'OUT';
+    const finalT1 = isOut
+      ? Number((openingStock.type1 - matTotals.type1).toFixed(3))
+      : Number((matTotals.type1 + openingStock.type1).toFixed(3));
+    const finalT2 = isOut
+      ? Number((openingStock.type2 - matTotals.type2).toFixed(3))
+      : Number((matTotals.type2 + openingStock.type2).toFixed(3));
+
+    // Opening Stock Row
+    result.push({
+      id: `opening-stock-row-${month}-${year}`,
+      type1: openingStock.type1,
+      type2: openingStock.type2,
+      material: '---',
+      rate: '---',
+      vendor: '---',
+      seller: '---',
+      remark: 'OPENING STOCK',
+      amount: '---',
+      isTotal: true,
+      actionLabel: 'OPENING'
+    });
+
+    // Final Total Row
+    result.push({
+      id: `final-total-row-${month}-${year}`,
+      type1: finalT1,
+      type2: finalT2,
+      material: '---',
+      rate: '---',
+      vendor: '---',
+      seller: '---',
+      remark: isOut ? 'CLOSING STOCK' : 'FINAL TOTAL',
+      amount: '---',
+      isTotal: true,
+      actionLabel: isOut ? 'CLOSING' : 'FINAL'
+    });
+  }
+
   // Adjustment Rows
   const adjGroup = [...savedAdjRows];
 
@@ -143,7 +200,7 @@ export default function JobReportDetail() {
   // Lifted Filter State
    const [selectedYear, setSelectedYear] = useState(currentYear);
    const [activeMonth, setActiveMonth]   = useState(currentMonth);
-   const [payModal, setPayModal] = useState({ isOpen: false, date: new Date().toISOString().split('T')[0], amount: '', remark: '' });
+   const [payModal, setPayModal] = useState({ isOpen: false, date: getLocalTodayString(), amount: '', remark: '' });
    const [activeTab, setActiveTab] = useState('OUT');
    const [editModal, setEditModal] = useState({ 
       isOpen: false, jobberId: null, jobberName: '', 
@@ -242,7 +299,7 @@ export default function JobReportDetail() {
       });
 
       if (resp.ok) {
-        setPayModal({ isOpen: false, date: new Date().toISOString().split('T')[0], amount: '', remark: '' });
+        setPayModal({ isOpen: false, date: getLocalTodayString(), amount: '', remark: '' });
         fetchReport();
       } else {
         alert('Failed to save payment.');
@@ -349,6 +406,14 @@ export default function JobReportDetail() {
       const resp = await fetch(`${API_BASE_URL}/job-report/${encodeURIComponent(jobber.name)}`);
       if (resp.ok) {
         const json = await resp.json();
+        if (json.transactions) {
+          json.transactions = json.transactions.map(tx => {
+            if (tx.date) {
+              tx.date = toLocalYYYYMMDD(tx.date);
+            }
+            return tx;
+          });
+        }
         setReport(json);
       } else {
         setReport(null);
@@ -622,7 +687,7 @@ export default function JobReportDetail() {
             <div className="flex-1 overflow-auto">
               <DataTable 
                 columns={IN_COLUMNS}
-                initialData={prepareTableData(inTransactions, activeMonth, selectedYear)}
+                initialData={prepareTableData(inTransactions, activeMonth, selectedYear, openingStock, 'IN')}
                 comboboxFields={{ 
                   seller: masters.sellers.map(s => s.name), 
                   jobber: masters.jobbers.map(j => j.name)
@@ -642,7 +707,7 @@ export default function JobReportDetail() {
               </h3>
               <div className="flex items-center gap-2">
                 <button 
-                  onClick={() => setPayModal({ isOpen: true, date: new Date().toISOString().split('T')[0], amount: '', remark: '' })}
+                  onClick={() => setPayModal({ isOpen: true, date: getLocalTodayString(), amount: '', remark: '' })}
                   className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 rounded text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
                   title="Add Deduction/Payment"
                 >
@@ -659,7 +724,7 @@ export default function JobReportDetail() {
             <div className="flex-1 overflow-auto">
               <DataTable 
                 columns={OUT_COLUMNS}
-                initialData={prepareTableData(outTransactions, activeMonth, selectedYear)}
+                initialData={prepareTableData(outTransactions, activeMonth, selectedYear, openingStock, 'OUT')}
                 comboboxFields={{ 
                   vendor: masters.vendors.map(v => v.name),
                   jobber: masters.jobbers.map(j => j.name)

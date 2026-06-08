@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
   Download,
@@ -11,6 +11,7 @@ import {
   RotateCcw,
   X,
   Save,
+  Search,
 } from 'lucide-react';
 import DataTable, { EditCombobox } from '../components/DataTable';
 import DateField from '../components/DateField';
@@ -102,6 +103,19 @@ const TOOLBAR_ICONS = [
   { id: 'download',   icon: Download,    label: 'Download'    },
 ];
 
+const toLocalYYYYMMDD = (dateVal) => {
+  if (!dateVal) return '';
+  if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
+    return dateVal;
+  }
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dateStr = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dateStr}`;
+};
+
 export default function MaterialOut() {
   const { setHeaderActions } = useOutletContext();
   const [data, setData] = useState([]);
@@ -110,6 +124,16 @@ export default function MaterialOut() {
   const [masters, setMasters] = useState({ vendors: [], jobbers: [], items: [] });
   const [newRow, setNewRow] = useState(getInitialRow());
   const [loading, setLoading] = useState(true);
+  const [searchFilters, setSearchFilters] = useState({ vendor: '', jobber: '', material: '' });
+
+  const filteredData = useMemo(() => {
+    return data.filter(item => {
+      const matchVendor   = (item.vendor || '').toLowerCase().includes(searchFilters.vendor.toLowerCase());
+      const matchJobber   = (item.jobber || '').toLowerCase().includes(searchFilters.jobber.toLowerCase());
+      const matchMaterial = (item.material || '').toLowerCase().includes(searchFilters.material.toLowerCase());
+      return matchVendor && matchJobber && matchMaterial;
+    });
+  }, [data, searchFilters]);
 
   // New Item Modal State
   const [showItemModal, setShowItemModal] = useState(false);
@@ -128,11 +152,14 @@ export default function MaterialOut() {
       const json = await resp.json();
       
       const mapped = json.map(item => {
-        const d = new Date(item.date);
+        if (item.date) {
+          item.date = toLocalYYYYMMDD(item.date);
+        }
+        const parts = item.date.split('-');
         return {
           ...item,
-          _month: d.getMonth(),
-          _year: d.getFullYear()
+          _month: parseInt(parts[1], 10) - 1,
+          _year: parseInt(parts[0], 10)
         };
       });
       setData(mapped);
@@ -533,13 +560,63 @@ export default function MaterialOut() {
         </div>
       )}
 
+      {/* Search & Filter Bar */}
+      <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-sm px-4 py-2.5 flex flex-wrap items-center gap-4 mb-6">
+        <div className="flex items-center gap-2 text-[#64748B]">
+          <Search size={14} className="text-[#2563EB]" />
+          <span className="text-[10px] font-bold uppercase tracking-widest">Quick Filters</span>
+        </div>
+        
+        <div className="flex-1 min-w-[180px] relative group">
+          <input
+            type="text"
+            placeholder="Search Material..."
+            value={searchFilters.material}
+            onChange={(e) => setSearchFilters({ ...searchFilters, material: e.target.value })}
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded px-2 py-1.5 focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] outline-none transition-all placeholder:text-[#64748B]"
+          />
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] group-focus-within:text-[#2563EB] transition-colors" />
+        </div>
+
+        <div className="flex-1 min-w-[180px] relative group">
+          <input
+            type="text"
+            placeholder="Search Jobber..."
+            value={searchFilters.jobber}
+            onChange={(e) => setSearchFilters({ ...searchFilters, jobber: e.target.value })}
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded px-2 py-1.5 focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] outline-none transition-all placeholder:text-[#64748B]"
+          />
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] group-focus-within:text-[#2563EB] transition-colors" />
+        </div>
+
+        <div className="flex-1 min-w-[180px] relative group">
+          <input
+            type="text"
+            placeholder="Search Vendor..."
+            value={searchFilters.vendor}
+            onChange={(e) => setSearchFilters({ ...searchFilters, vendor: e.target.value })}
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded px-2 py-1.5 focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] outline-none transition-all placeholder:text-[#64748B]"
+          />
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] group-focus-within:text-[#2563EB] transition-colors" />
+        </div>
+        
+        {(searchFilters.vendor || searchFilters.jobber || searchFilters.material) && (
+          <button 
+            onClick={() => setSearchFilters({ vendor: '', jobber: '', material: '' })}
+            className="text-[10px] font-bold text-[#E11D48] hover:text-[#9F1239] transition-colors uppercase tracking-tight"
+          >
+            Clear All
+          </button>
+        )}
+      </div>
+
       <div className="flex-1 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-full text-xs text-[#64748B]">Loading data...</div>
         ) : (
           <DataTable
             columns={COLUMNS}
-            initialData={data}
+            initialData={filteredData}
             comboboxFields={{ 
               jobber: (masters.jobbers || []).map(j => j.name), 
               vendor: (masters.vendors || []).map(v => v.name),

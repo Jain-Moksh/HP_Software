@@ -52,6 +52,19 @@ const getInitialRow = () => {
   };
 };
 
+const toLocalYYYYMMDD = (dateVal) => {
+  if (!dateVal) return '';
+  if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
+    return dateVal;
+  }
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dateStr = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dateStr}`;
+};
+
 export default function MaterialTransfer() {
   const { setHeaderActions } = useOutletContext();
   const [data, setData] = useState([]);
@@ -78,11 +91,14 @@ export default function MaterialTransfer() {
       const json = await resp.json();
       
       const mapped = json.map(item => {
-        const d = new Date(item.date);
+        if (item.date) {
+          item.date = toLocalYYYYMMDD(item.date);
+        }
+        const parts = item.date.split('-');
         return {
           ...item,
-          _month: d.getMonth(),
-          _year: d.getFullYear()
+          _month: parseInt(parts[1], 10) - 1,
+          _year: parseInt(parts[0], 10)
         };
       });
       setData(mapped);

@@ -19,14 +19,26 @@ const COLUMNS = [
   { key: 'remark',   label: 'Remark',    type: 'text', minWidth: '160px' },
 ];
 
+const toLocalYYYYMMDD = (dateVal) => {
+  if (!dateVal) return '';
+  if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
+    return dateVal;
+  }
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dateStr = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dateStr}`;
+};
+
 const getLocalDateParts = (dateStr) => {
   if (!dateStr) {
     const d = new Date();
     return { month: d.getMonth(), year: d.getFullYear(), day: d.getDate() };
   }
-  if (typeof dateStr === 'string') {
-    const dateOnly = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
-    const parts = dateOnly.split('-');
+  if (typeof dateStr === 'string' && !dateStr.includes('T')) {
+    const parts = dateStr.split('-');
     if (parts.length === 3) {
       return {
         year: parseInt(parts[0], 10),
@@ -181,6 +193,14 @@ export default function SellerReportDetail() {
       const resp = await fetch(`${API_BASE_URL}/seller-report/${encodeURIComponent(seller.name)}`);
       if (resp.ok) {
         const json = await resp.json();
+        if (json.transactions) {
+          json.transactions = json.transactions.map(tx => {
+            if (tx.date) {
+              tx.date = toLocalYYYYMMDD(tx.date);
+            }
+            return tx;
+          });
+        }
         setReport(json);
       } else {
         setReport(null);
