@@ -327,6 +327,8 @@ export default function DataTable({
   calculateFields,
   checkboxRecalcFields = [],
   hideFilters = false, // If true, suppresses internal month/year pagination
+  noVerticalScroll = false,
+  children,
 }) {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
@@ -653,99 +655,109 @@ export default function DataTable({
     }
   };
 
-  return (
-    <div className="flex flex-col h-full">
+  const tableEl = (
+    <table className="min-w-full text-sm border-collapse">
+      {/* sticky header */}
+      <thead className="sticky top-0 z-10">
+        <tr className="bg-[#334155] text-white">
+          {headerLabels.map(col => (
+            <th
+              key={col}
+              className="px-3 py-2 text-center text-xs font-semibold tracking-wide border-r border-[#475569] last:border-r-0 whitespace-nowrap"
+            >
+              {col}
+            </th>
+          ))}
+        </tr>
+      </thead>
 
-      {/* ── table wrapper ── */}
-      <div className="flex-1 overflow-auto border border-[#E2E8F0] rounded-lg">
-        <table className="min-w-full text-sm border-collapse">
+      <tbody>
+        {filteredRows.map((row, idx) => {
+          const uniqueRowId = getUniqueId(row);
+          const isEditing = editingId === uniqueRowId;
+          const rowCls = `border-b border-[#E2E8F0] transition-colors ${
+            row.isTotal
+              ? 'bg-slate-50 font-bold'
+              : isEditing
+                ? 'bg-[#EFF6FF] ring-2 ring-inset ring-[#93C5FD]'
+                : idx % 2 === 0
+                  ? 'bg-white hover:bg-[#F1F5F9]'
+                  : 'bg-[#F8FAFC] hover:bg-[#F1F5F9]'
+          }`;
 
-          {/* sticky header */}
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-[#334155] text-white">
-              {headerLabels.map(col => (
-                <th
-                  key={col}
-                  className="px-3 py-2 text-center text-xs font-semibold tracking-wide border-r border-[#475569] last:border-r-0 whitespace-nowrap"
-                >
-                  {col}
-                </th>
-              ))}
+          return (
+            <tr
+              key={uniqueRowId}
+              ref={isEditing ? editRowRef : null}
+              className={rowCls}
+            >
+              {/* # */}
+              <td className="px-3 py-1.5 text-[#64748B] border-r border-[#E2E8F0] w-8 text-center font-mono text-xs">
+                {idx + 1}
+              </td>
+
+              {/* Actions */}
+              <td className="px-3 py-1.5 border-r border-[#E2E8F0] whitespace-nowrap text-center w-[80px]">
+                {row.isTotal ? (
+                  <span className="font-bold text-[#0F172A] text-xs">{row.actionLabel || 'TOTAL'}</span>
+                ) : (
+                  <div className="flex items-center justify-center gap-1.5">
+                    {isEditing ? (
+                      <button
+                        title="Save"
+                        onMouseDown={e => { e.stopPropagation(); commitEdit(); }}
+                        className="w-6 h-6 flex items-center justify-center rounded bg-[#2563EB] hover:bg-[#1D4ED8] text-white transition-colors"
+                      >
+                        <Save size={13} />
+                      </button>
+                    ) : !row.readOnly ? (
+                      <button
+                        title="Edit"
+                        onClick={() => startEdit(row)}
+                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-blue-50 text-[#2563EB] transition-colors"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                    ) : null}
+
+                    <button
+                      title="Delete"
+                      className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-red-500 transition-colors"
+                      onClick={(e) => handleDeleteRequest(e, row)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )}
+              </td>
+
+              {/* Dynamic columns */}
+              {columns.map((col, colIdx) => renderCell(col, row, isEditing, colIdx))}
             </tr>
-          </thead>
+          );
+        })}
+      </tbody>
+    </table>
+  );
 
-          <tbody>
-            {filteredRows.map((row, idx) => {
-              const uniqueRowId = getUniqueId(row);
-              const isEditing = editingId === uniqueRowId;
-              const rowCls = `border-b border-[#E2E8F0] transition-colors ${
-                row.isTotal
-                  ? 'bg-slate-50 font-bold'
-                  : isEditing
-                    ? 'bg-[#EFF6FF] ring-2 ring-inset ring-[#93C5FD]'
-                    : idx % 2 === 0
-                      ? 'bg-white hover:bg-[#F1F5F9]'
-                      : 'bg-[#F8FAFC] hover:bg-[#F1F5F9]'
-              }`;
-
-              return (
-                <tr
-                  key={uniqueRowId}
-                  ref={isEditing ? editRowRef : null}
-                  className={rowCls}
-                >
-                  {/* # */}
-                  <td className="px-3 py-1.5 text-[#64748B] border-r border-[#E2E8F0] w-8 text-center font-mono text-xs">
-                    {idx + 1}
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-3 py-1.5 border-r border-[#E2E8F0] whitespace-nowrap text-center w-[80px]">
-                    {row.isTotal ? (
-                      <span className="font-bold text-[#0F172A] text-xs">{row.actionLabel || 'TOTAL'}</span>
-                    ) : (
-                      <div className="flex items-center justify-center gap-1.5">
-                        {isEditing ? (
-                          <button
-                            title="Save"
-                            onMouseDown={e => { e.stopPropagation(); commitEdit(); }}
-                            className="w-6 h-6 flex items-center justify-center rounded bg-[#2563EB] hover:bg-[#1D4ED8] text-white transition-colors"
-                          >
-                            <Save size={13} />
-                          </button>
-                        ) : !row.readOnly ? (
-                          <button
-                            title="Edit"
-                            onClick={() => startEdit(row)}
-                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-blue-50 text-[#2563EB] transition-colors"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                        ) : null}
-
-                        <button
-                          title="Delete"
-                          className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-red-500 transition-colors"
-                          onClick={(e) => handleDeleteRequest(e, row)}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    )}
-                  </td>
-
-                  {/* Dynamic columns */}
-                  {columns.map((col, colIdx) => renderCell(col, row, isEditing, colIdx))}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+  return (
+    <div className={`flex flex-col ${noVerticalScroll ? '' : 'h-full'}`}>
+      {noVerticalScroll ? (
+        <div className="overflow-x-auto border border-[#E2E8F0] rounded-lg">
+          {tableEl}
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto p-1 space-y-6">
+          {children}
+          <div className="border border-[#E2E8F0] rounded-lg overflow-x-auto bg-white">
+            {tableEl}
+          </div>
+        </div>
+      )}
 
       {/* ── Month & Year pagination ── */}
       {!hideFilters && (
-        <div className="mt-4 flex items-center justify-between gap-1.5 flex-wrap">
+        <div className="mt-4 flex items-center justify-between gap-1.5 flex-wrap flex-none">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-xs font-medium text-[#64748B] mr-1">Months:</span>
             <div className="flex items-center gap-1 bg-[#F1F5F9] px-2 py-0.5 rounded border border-[#E2E8F0] mr-2">

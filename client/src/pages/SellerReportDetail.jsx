@@ -419,9 +419,9 @@ export default function SellerReportDetail() {
         </div>
       </div>
 
-      {/* ── Body ── */}
-      <div className="flex-1 p-4 overflow-hidden flex flex-col">
-        <div className="flex-1 flex flex-col bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden">
+      {/* ── Scrollable Body ── */}
+      <div className="flex-1 p-4 overflow-y-auto flex flex-col">
+        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm flex flex-col shrink-0">
           <div className="px-4 py-2 bg-[#F1F5F9] border-b border-[#E2E8F0] flex items-center justify-between">
             <h3 className="text-xs font-bold text-[#0F172A]">Supply Records</h3>
             <div className="flex items-center gap-2">
@@ -440,7 +440,7 @@ export default function SellerReportDetail() {
               </span>
             </div>
           </div>
-          <div className="flex-1 overflow-auto p-1">
+          <div className="overflow-x-auto p-1">
             <DataTable 
               columns={COLUMNS}
               initialData={prepareTableData(transactions, activeMonth, selectedYear, showAdjEntry)}
@@ -451,6 +451,7 @@ export default function SellerReportDetail() {
               onDelete={handleDelete}
               onAddNewOption={(field, val) => ensureMasterRecord(field, val)}
               hideFilters={true}
+              noVerticalScroll={true}
             />
           </div>
         </div>

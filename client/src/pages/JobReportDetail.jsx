@@ -649,8 +649,8 @@ export default function JobReportDetail() {
         </div>
       </div>
 
-      {/* ── Fixed Split Body (No main scroll) ── */}
-      <div className="flex-1 p-4 flex flex-col gap-4 overflow-hidden">
+      {/* ── Scrollable Body ── */}
+      <div className="flex-1 p-4 flex flex-col gap-4 overflow-y-auto">
         {/* TABS */}
         <div className="flex gap-2 shrink-0">
            <button 
@@ -672,7 +672,7 @@ export default function JobReportDetail() {
         </div>
 
         {activeTab === 'IN' ? (
-          <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden flex flex-col">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm flex flex-col shrink-0">
             <div className="px-4 py-2 bg-[#F1F5F9] border-b border-[#E2E8F0] flex items-center justify-between">
               <h3 className="text-xs font-bold text-[#0F172A] flex items-center gap-2">
                 <TrendingUp size={14} className="text-emerald-500" /> Material Inward (IN)
@@ -684,7 +684,7 @@ export default function JobReportDetail() {
                  }).length} Records
               </span>
             </div>
-            <div className="flex-1 overflow-auto">
+            <div className="overflow-x-auto">
               <DataTable 
                 columns={IN_COLUMNS}
                 initialData={prepareTableData(inTransactions, activeMonth, selectedYear, openingStock, 'IN')}
@@ -696,11 +696,12 @@ export default function JobReportDetail() {
                 onAddNewOption={handleAddNewOption}
                 onDelete={(id, pass) => handleDelete(id, pass, 'IN')}
                 hideFilters={true}
+                noVerticalScroll={true}
               />
             </div>
           </div>
         ) : (
-          <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden flex flex-col">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm flex flex-col shrink-0">
             <div className="px-4 py-2 bg-[#F1F5F9] border-b border-[#E2E8F0] flex items-center justify-between">
               <h3 className="text-xs font-bold text-[#0F172A] flex items-center gap-2">
                 <TrendingDown size={14} className="text-rose-500" /> Material Outward (OUT)
@@ -721,7 +722,7 @@ export default function JobReportDetail() {
                 </span>
               </div>
             </div>
-            <div className="flex-1 overflow-auto">
+            <div className="overflow-x-auto">
               <DataTable 
                 columns={OUT_COLUMNS}
                 initialData={prepareTableData(outTransactions, activeMonth, selectedYear, openingStock, 'OUT')}
@@ -733,6 +734,7 @@ export default function JobReportDetail() {
                 onAddNewOption={handleAddNewOption}
                 onDelete={(id, pass, type) => handleDelete(id, pass, type || 'OUT')}
                 hideFilters={true}
+                noVerticalScroll={true}
               />
             </div>
           </div>
