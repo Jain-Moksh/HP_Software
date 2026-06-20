@@ -100,6 +100,9 @@ module.exports = {
     } catch (err) {
       // 42P01 is the PostgreSQL error code for 'undefined_table'
       if (err.code === '42P01') {
+        if (global.isBackupRestoreRunning) {
+          throw err;
+        }
         console.warn(`[Auto-Repair] Missing table detected (42P01). Running schema.sql...`);
         const schemaPath = path.join(__dirname, '../schema.sql');
         if (fs.existsSync(schemaPath)) {
@@ -116,4 +119,36 @@ module.exports = {
     if (!isInitialized) await initPromise;
     return pool.connect();
   },
+  refreshPool: async () => {
+    console.log('[RESTORE] Pool refresh started');
+    if (pool) {
+      try {
+        await pool.end();
+      } catch (err) {
+        console.error('Error ending current pool during refresh:', err);
+      }
+    }
+    const dbName = process.env.DB_NAME || 'hp';
+    pool = new Pool({
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT,
+      database: dbName,
+    });
+    pool.on('error', (err) => {
+      console.error('Unexpected error on idle client after refresh', err);
+      process.exit(-1);
+    });
+    // Verify connection
+    const client = await pool.connect();
+    try {
+      await client.query('SELECT 1');
+    } finally {
+      client.release();
+    }
+    isInitialized = true;
+    initPromise = Promise.resolve();
+    console.log('[RESTORE] Pool refresh completed');
+  }
 };

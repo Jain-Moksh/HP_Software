@@ -4,6 +4,10 @@ const fs = require('fs');
 const path = require('path');
 const ftp = require('basic-ftp');
 const stream = require('stream');
+const { execFile } = require('child_process');
+const util = require('util');
+const readline = require('readline');
+const execFileAsync = util.promisify(execFile);
 
 const configPath = path.join(__dirname, '..', 'config', 'backup-config.json');
 
@@ -77,7 +81,7 @@ const writeConfig = (config) => {
 };
 
 // Helper to upload a backup file via FTP
-const uploadBackupToFtp = async (config, filename, sql) => {
+const uploadBackupToFtp = async (config, filename, filePath) => {
   const client = new ftp.Client();
   client.ftp.timeout = 15000;
   try {
@@ -96,10 +100,7 @@ const uploadBackupToFtp = async (config, filename, sql) => {
       await client.ensureDir(config.ftpPath);
     }
 
-    const bufferStream = new stream.PassThrough();
-    bufferStream.end(Buffer.from(sql, 'utf-8'));
-
-    await client.uploadFrom(bufferStream, filename);
+    await client.uploadFrom(filePath, filename);
 
     if (config.lastFile) {
       try {
@@ -134,158 +135,337 @@ const escapeSqlDateOnly = (val) => {
   return `'${y}-${m}-${dateVal}'`;
 };
 
-// SQL script generation engine
-const generateBackupSql = async () => {
-  const sqlParts = [];
-
-  sqlParts.push(`-- HP Accounting Software Programmatic Backup\n`);
-  sqlParts.push(`-- Generated: ${new Date().toLocaleString()}\n\n`);
-  sqlParts.push(`BEGIN;\n\n`);
-
-  const knownTables = [
-    'items', 'jobbers', 'sellers', 'vendors', 'transactions_in', 
-    'transactions_out', 'jobber_adjustments', 'seller_adjustments', 'material_transfers'
+// Helper to locate pg_dump/psql
+const getPgUtilPath = (utilName) => {
+  const basePaths = [
+    'C:\\Program Files\\PostgreSQL\\18\\bin',
+    'C:\\Program Files\\PostgreSQL\\17\\bin',
   ];
-
-  const tableRes = await db.query(`
-    SELECT table_name 
-    FROM information_schema.tables 
-    WHERE table_schema = 'public' 
-      AND table_type = 'BASE TABLE'
-  `);
-  const dbTables = tableRes.rows.map(r => r.table_name);
-
-  const existingKnown = knownTables.filter(t => dbTables.includes(t));
-  const extraTables = dbTables.filter(t => !knownTables.includes(t));
-  const finalTables = [...existingKnown, ...extraTables];
-
-  if (finalTables.length > 0) {
-    // 1. Generate CREATE TABLE statements for all tables first
-    sqlParts.push(`-- Creating Tables\n`);
-    for (const tableName of finalTables) {
-      const colRes = await db.query(`
-        SELECT column_name, data_type, character_maximum_length, is_nullable, column_default
-        FROM information_schema.columns 
-        WHERE table_name = $1 
-        ORDER BY ordinal_position
-      `, [tableName]);
-      
-      if (colRes.rows.length === 0) continue;
-
-      const ddlParts = [];
-      for (const col of colRes.rows) {
-        let isSerial = false;
-        let typeStr = col.data_type.toUpperCase();
-        
-        if (col.column_default && col.column_default.includes('nextval')) {
-          isSerial = true;
-          if (typeStr.includes('BIGINT')) {
-            typeStr = 'BIGSERIAL';
-          } else if (typeStr.includes('SMALLINT')) {
-            typeStr = 'SMALLSERIAL';
-          } else {
-            typeStr = 'SERIAL';
-          }
-        }
-
-        let def = `"${col.column_name}" ${typeStr}`;
-        if (col.character_maximum_length) {
-          def += `(${col.character_maximum_length})`;
-        }
-        if (col.column_default && !isSerial) {
-          def += ` DEFAULT ${col.column_default}`;
-        }
-        if (col.is_nullable === 'NO' && !isSerial) {
-          def += ' NOT NULL';
-        }
-        ddlParts.push(def);
-      }
-
-      // Add Primary Key constraint if exists
-      const pkRes = await db.query(`
-        SELECT kcu.column_name
-        FROM information_schema.table_constraints tc
-        JOIN information_schema.key_column_usage kcu
-          ON tc.constraint_name = kcu.constraint_name
-          AND tc.table_schema = kcu.table_schema
-        WHERE tc.constraint_type = 'PRIMARY KEY'
-          AND tc.table_name = $1
-      `, [tableName]);
-      
-      if (pkRes.rows.length > 0) {
-        const pkCols = pkRes.rows.map(r => `"${r.column_name}"`).join(', ');
-        ddlParts.push(`PRIMARY KEY (${pkCols})`);
-      }
-
-      sqlParts.push(`CREATE TABLE IF NOT EXISTS "${tableName}" (\n  ${ddlParts.join(',\n  ')}\n);\n\n`);
-    }
-
-    // 2. Wiping existing data
-    sqlParts.push(`TRUNCATE TABLE ${finalTables.map(t => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE;\n\n`);
-    
-    // 3. Inserting table data
-    for (const tableName of finalTables) {
-      const colRes = await db.query(`
-        SELECT column_name, data_type 
-        FROM information_schema.columns 
-        WHERE table_name = $1 
-        ORDER BY ordinal_position
-      `, [tableName]);
-      
-      if (colRes.rows.length === 0) continue;
-
-      const columns = colRes.rows.map(r => `"${r.column_name}"`);
-      const hasId = colRes.rows.some(r => r.column_name === 'id');
-      const query = hasId ? `SELECT * FROM "${tableName}" ORDER BY id` : `SELECT * FROM "${tableName}"`;
-      
-      const dataRes = await db.query(query);
-      if (dataRes.rows.length === 0) continue;
-
-      sqlParts.push(`-- Dumping ${tableName}\n`);
-      for (const r of dataRes.rows) {
-        const vals = colRes.rows.map(col => {
-          const val = r[col.column_name];
-          if (val === null || val === undefined) return 'NULL';
-          
-          const type = col.data_type.toLowerCase();
-          if (type.includes('int') || type.includes('num') || type.includes('double') || type.includes('real')) {
-            return Number(val);
-          } else if (type.includes('bool')) {
-            return val ? 'true' : 'false';
-          } else if (type.includes('date')) {
-            const d = new Date(val);
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, '0');
-            const dateVal = String(d.getDate()).padStart(2, '0');
-            return `'${y}-${m}-${dateVal}'`;
-          } else if (type.includes('time') || type.includes('timestamp')) {
-            return `'${new Date(val).toISOString()}'`;
-          } else {
-            return `'${val.toString().replace(/'/g, "''")}'`;
-          }
-        });
-        
-        sqlParts.push(`INSERT INTO "${tableName}" (${columns.join(', ')}) VALUES (${vals.join(', ')});\n`);
-      }
-      sqlParts.push(`\n`);
-    }
-
-    sqlParts.push(`-- Resetting Sequences\n`);
-    for (const tableName of finalTables) {
-      sqlParts.push(`DO $$
-DECLARE
-  seq_name text;
-BEGIN
-  SELECT pg_get_serial_sequence('"${tableName}"', 'id') INTO seq_name;
-  IF seq_name IS NOT NULL THEN
-    EXECUTE 'SELECT setval(' || quote_literal(seq_name) || ', COALESCE(MAX(id), 1)) FROM "${tableName}"';
-  END IF;
-END $$;\n`);
+  for (const p of basePaths) {
+    const fullPath = path.join(p, `${utilName}.exe`);
+    if (fs.existsSync(fullPath)) {
+      return fullPath;
     }
   }
+  return `${utilName}.exe`;
+};
 
-  sqlParts.push(`\nCOMMIT;\n`);
-  return sqlParts.join('');
+// Helper to count expected rows in backup plain text streamingly
+const getExpectedRowCounts = async (filePath) => {
+  const counts = {};
+  const fileStream = fs.createReadStream(filePath);
+  const rl = readline.createInterface({
+    input: fileStream,
+    crlfDelay: Infinity
+  });
+
+  let currentTable = null;
+  let inCopy = false;
+
+  for await (const line of rl) {
+    const trimmed = line.trim();
+    
+    // Check for COPY public.tablename (...) FROM stdin;
+    const copyMatch = trimmed.match(/^COPY\s+(?:public\.)?"?(\w+)"?\s*(?:\([^)]+\))?\s*FROM\s+stdin/i);
+    if (copyMatch) {
+      currentTable = copyMatch[1];
+      counts[currentTable] = 0;
+      inCopy = true;
+      continue;
+    }
+    
+    if (inCopy) {
+      if (trimmed === '\\.') {
+        inCopy = false;
+        currentTable = null;
+      } else if (trimmed !== '') {
+        counts[currentTable]++;
+      }
+      continue;
+    }
+    
+    // Check for INSERT INTO public.tablename or tablename
+    const insertMatch = trimmed.match(/^INSERT\s+INTO\s+(?:public\.)?"?(\w+)"?/i);
+    if (insertMatch) {
+      const table = insertMatch[1];
+      counts[table] = (counts[table] || 0) + 1;
+    }
+  }
+  return counts;
+};
+
+// Shared Core Backup Engine
+const runCoreBackup = async (outputPath) => {
+  console.log('[BACKUP] Backup started');
+  const pgDumpPath = getPgUtilPath('pg_dump');
+  
+  const dbName = process.env.DB_NAME || 'hp';
+  const dbUser = process.env.DB_USER || 'postgres';
+  const dbHost = process.env.DB_HOST || 'localhost';
+  const dbPort = process.env.DB_PORT || '5433';
+  const dbPassword = process.env.DB_PASSWORD || 'Pass@123';
+  
+  const args = [
+    '-U', dbUser,
+    '-h', dbHost,
+    '-p', dbPort,
+    '-d', dbName,
+    '-F', 'p', // Plain SQL format
+    '-f', outputPath
+  ];
+  
+  const env = {
+    ...process.env,
+    PGPASSWORD: dbPassword
+  };
+  
+  try {
+    await execFileAsync(pgDumpPath, args, { env });
+    
+    // Validation
+    if (!fs.existsSync(outputPath)) {
+      throw new Error(`Backup file does not exist at ${outputPath}`);
+    }
+    const stats = fs.statSync(outputPath);
+    if (stats.size === 0) {
+      throw new Error('Backup file is empty (size is 0 bytes)');
+    }
+    
+    // Verify readable (can open it)
+    const fd = fs.openSync(outputPath, 'r');
+    fs.closeSync(fd);
+    
+    console.log('[BACKUP] Backup completed');
+    console.log(`[BACKUP] Backup size: ${stats.size} bytes`);
+    console.log(`[BACKUP] Backup location: ${outputPath}`);
+    
+    return {
+      success: true,
+      size: stats.size,
+      location: outputPath
+    };
+  } catch (err) {
+    console.error(`[BACKUP] Backup failed:`, err);
+    throw err;
+  }
+};
+
+// Shared Core Restore Engine
+const runCoreRestore = async (filePath) => {
+  global.isBackupRestoreRunning = true;
+  console.log('[RESTORE] Backup file detected');
+  
+  // 4. Verify backup file exists
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Backup file does not exist at ${filePath}`);
+  }
+  
+  // 5. Verify backup file size > 0
+  const stats = fs.statSync(filePath);
+  if (stats.size === 0) {
+    throw new Error('Restore file is empty');
+  }
+  
+  // 6. Verify backup file format is valid (read first 1000 characters)
+  console.log('[RESTORE] Validation started');
+  const fd = fs.openSync(filePath, 'r');
+  const buffer = Buffer.alloc(1000);
+  const bytesRead = fs.readSync(fd, buffer, 0, 1000, 0);
+  fs.closeSync(fd);
+  const headerCheck = buffer.toString('utf8', 0, bytesRead);
+  if (!headerCheck.includes('PostgreSQL database dump') && 
+      !headerCheck.includes('CREATE TABLE') && 
+      !headerCheck.includes('INSERT INTO')) {
+    throw new Error('Invalid backup file format: Not a recognized PostgreSQL SQL dump');
+  }
+  
+  const psqlPath = getPgUtilPath('psql');
+  const dbName = process.env.DB_NAME || 'hp';
+  const dbUser = process.env.DB_USER || 'postgres';
+  const dbHost = process.env.DB_HOST || 'localhost';
+  const dbPort = process.env.DB_PORT || '5433';
+  const dbPassword = process.env.DB_PASSWORD || 'Pass@123';
+  
+  // Create a rollback backup of current database before starting
+  const tempDir = path.join(__dirname, '..', 'temp');
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+  const tempRollbackPath = path.join(tempDir, `rollback_temp_${Date.now()}.sql`);
+  let createdRollback = false;
+  try {
+    console.log('[RESTORE] Creating rollback point...');
+    await runCoreBackup(tempRollbackPath);
+    createdRollback = true;
+  } catch (rollbackBackupErr) {
+    console.warn('[RESTORE] Warning: Could not create rollback backup. Continuing without rollback capability.', rollbackBackupErr.message);
+  }
+  
+  const executeRollback = async () => {
+    if (!createdRollback || !fs.existsSync(tempRollbackPath)) {
+      console.error('[RESTORE] [ROLLBACK] Rollback skipped: No rollback backup file found');
+      return;
+    }
+    console.log('[RESTORE] [ROLLBACK] Initiating rollback to original state...');
+    try {
+      // Clean schema
+      const client = await db.connect();
+      try {
+        await client.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+      } finally {
+        client.release();
+      }
+      
+      // Execute psql with rollback file
+      const rollbackArgs = [
+        '-v', 'ON_ERROR_STOP=1',
+        '-U', dbUser,
+        '-h', dbHost,
+        '-p', dbPort,
+        '-d', dbName,
+        '-f', tempRollbackPath
+      ];
+      await execFileAsync(psqlPath, rollbackArgs, { env: { ...process.env, PGPASSWORD: dbPassword } });
+      console.log('[RESTORE] [ROLLBACK] Rollback completed successfully.');
+      
+      // Refresh connection pool after rollback
+      const refreshDb = require('../config/db');
+      if (refreshDb.refreshPool) {
+        await refreshDb.refreshPool();
+      }
+    } catch (rollbackErr) {
+      console.error('[RESTORE] [ROLLBACK] Critical error during rollback restore:', rollbackErr);
+    } finally {
+      try {
+        if (fs.existsSync(tempRollbackPath)) fs.unlinkSync(tempRollbackPath);
+      } catch (_) {}
+    }
+  };
+  
+  try {
+    // 7. Ensure target database exists
+    // 8. Create database if missing
+    console.log('[RESTORE] Database verification started');
+    const tempPool = new Pool({
+      user: dbUser,
+      password: dbPassword,
+      host: dbHost,
+      port: Number(dbPort),
+      database: 'postgres',
+    });
+    try {
+      const dbCheckRes = await tempPool.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbName]);
+      if (dbCheckRes.rows.length === 0) {
+        console.log(`[RESTORE] Target database "${dbName}" does not exist. Creating...`);
+        await tempPool.query(`CREATE DATABASE "${dbName}"`);
+      }
+    } finally {
+      await tempPool.end();
+    }
+    
+    // 9. Clean restoration target safely
+    console.log('[RESTORE] Cleaning target');
+    const cleanClient = await db.connect();
+    try {
+      await cleanClient.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+    } finally {
+      cleanClient.release();
+    }
+    
+    // 10. Execute restore
+    // 11. Configure restore command to fail immediately on SQL errors (psql ON_ERROR_STOP=1)
+    console.log('[RESTORE] Import started');
+    const args = [
+      '-v', 'ON_ERROR_STOP=1',
+      '-U', dbUser,
+      '-h', dbHost,
+      '-p', dbPort,
+      '-d', dbName,
+      '-f', filePath
+    ];
+    
+    const env = {
+      ...process.env,
+      PGPASSWORD: dbPassword
+    };
+    
+    // 12. Wait for restore completion
+    await execFileAsync(psqlPath, args, { env });
+    console.log('[RESTORE] Import completed');
+    
+    // 14. Refresh database connection pool
+    // 15. Clear stale connections
+    const refreshDb = require('../config/db');
+    if (refreshDb.refreshPool) {
+      await refreshDb.refreshPool();
+    }
+    
+    // 13. Validate restore integrity
+    console.log('[RESTORE] Validation started');
+    const expectedCounts = await getExpectedRowCounts(filePath);
+    const requiredTables = [
+      'items', 'jobbers', 'sellers', 'vendors', 'transactions_in', 
+      'transactions_out', 'jobber_adjustments', 'seller_adjustments', 'material_transfers'
+    ];
+    
+    const verificationClient = await db.connect();
+    try {
+      // 1. Verify required tables exist
+      const tableCheckRes = await verificationClient.query(`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+          AND table_type = 'BASE TABLE'
+      `);
+      const existingTables = tableCheckRes.rows.map(r => r.table_name);
+      for (const table of requiredTables) {
+        if (!existingTables.includes(table)) {
+          throw new Error(`Validation failed: Required table "${table}" is missing after restore`);
+        }
+      }
+      
+      // 2. Verify expected row counts
+      for (const table of requiredTables) {
+        const countRes = await verificationClient.query(`SELECT COUNT(*) as count FROM "${table}"`);
+        const actualCount = parseInt(countRes.rows[0].count, 10);
+        console.log(`[RESTORE] Table "${table}": Actual row count = ${actualCount}`);
+        
+        if (expectedCounts[table] !== undefined) {
+          const expected = expectedCounts[table];
+          if (actualCount !== expected) {
+            throw new Error(`Validation failed: Table "${table}" has row count mismatch. Expected ${expected}, got ${actualCount}`);
+          }
+        }
+      }
+      
+      // 3. Verify database can be queried and primary entities exist
+      for (const table of requiredTables) {
+        await verificationClient.query(`SELECT 1 FROM "${table}" LIMIT 1`);
+      }
+    } finally {
+      verificationClient.release();
+    }
+    
+    console.log('[RESTORE] Validation completed');
+    console.log('[RESTORE] Restore successful');
+    
+    // Cleanup temporary rollback file
+    try {
+      if (fs.existsSync(tempRollbackPath)) fs.unlinkSync(tempRollbackPath);
+    } catch (e) {
+      console.warn('Could not clean up temporary rollback file:', e.message);
+    }
+    
+    return { success: true };
+  } catch (err) {
+    console.error('[RESTORE] Restore failed:', err);
+    await executeRollback();
+    throw err;
+  } finally {
+    // 16. Re-enable auto-healing
+    // 17. Set global.isBackupRestoreRunning = false
+    global.isBackupRestoreRunning = false;
+  }
 };
 
 // Reusable check to verify and ensure the auto-backup file is physically present in the folder
@@ -302,19 +482,29 @@ const ensureAutoBackupFileExists = async () => {
       
       console.log(`[Auto-Backup] Startup check: Running initial backup to remote FTP server...`);
       const now = new Date();
-      const sql = await generateBackupSql();
-      const dateStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
-      const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
-      const filename = `AutoBackup-${dateStr}--${timeStr}.sql`;
+      const tempDir = path.join(__dirname, '..', 'temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      const tempPath = path.join(tempDir, `auto_backup_startup_${Date.now()}.sql`);
       
       try {
-        await uploadBackupToFtp(config, filename, sql);
+        await runCoreBackup(tempPath);
+        const dateStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+        const filename = `AutoBackup-${dateStr}--${timeStr}.sql`;
+        
+        await uploadBackupToFtp(config, filename, tempPath);
         console.log(`[Auto-Backup] Startup check: Successfully uploaded initial backup to FTP: ${filename}`);
         config.lastBackup = now.toISOString();
         config.lastFile = filename;
         writeConfig(config);
       } catch (ftpErr) {
         console.warn(`[Auto-Backup] Startup check failed to upload to FTP:`, ftpErr.message);
+      } finally {
+        if (fs.existsSync(tempPath)) {
+          try { fs.unlinkSync(tempPath); } catch (_) {}
+        }
       }
     } else {
       // Local backup verification
@@ -343,14 +533,13 @@ const ensureAutoBackupFileExists = async () => {
         }
 
         const now = new Date();
-        const sql = await generateBackupSql();
         const dateStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
         const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
         const filename = `AutoBackup-${dateStr}--${timeStr}.sql`;
         const fullPath = path.join(config.path, filename);
 
         try {
-          fs.writeFileSync(fullPath, sql, 'utf8');
+          await runCoreBackup(fullPath);
           console.log(`[Auto-Backup] Startup check: Successfully saved initial backup locally: ${fullPath}`);
           config.lastBackup = now.toISOString();
           config.lastFile = filename;
@@ -440,16 +629,31 @@ exports.saveBackupConfig = async (req, res) => {
 
 // GET /api/utility/backup/download
 exports.downloadManualBackup = async (req, res) => {
+  const tempDir = path.join(__dirname, '..', 'temp');
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+  const tempPath = path.join(tempDir, `manual_backup_${Date.now()}.sql`);
+  
   try {
-    const sql = await generateBackupSql();
+    await runCoreBackup(tempPath);
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
     const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
     const filename = `HP_Backup_${dateStr}_${timeStr}.sql`;
 
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(sql);
+    res.download(tempPath, filename, (err) => {
+      try {
+        if (fs.existsSync(tempPath)) {
+          fs.unlinkSync(tempPath);
+        }
+      } catch (unlinkErr) {
+        console.error('Failed to unlink manual backup temp file:', unlinkErr);
+      }
+      if (err) {
+        console.error('Error during manual backup file download:', err);
+      }
+    });
   } catch (err) {
     console.error('Error generating manual backup:', err);
     res.status(500).json({ error: 'Failed to create backup download' });
@@ -458,124 +662,49 @@ exports.downloadManualBackup = async (req, res) => {
 
 // POST /api/utility/restore
 exports.restoreBackup = async (req, res) => {
+  const tempDir = path.join(__dirname, '..', 'temp');
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+  const tempRestorePath = path.join(tempDir, `restore_${Date.now()}.sql`);
+
   try {
     const { sql } = req.body;
     if (!sql || sql.trim() === "") {
       return res.status(400).json({ error: 'No SQL content provided' });
     }
 
-    const dbName = process.env.DB_NAME || 'hp';
+    // Write input SQL to a temporary file
+    fs.writeFileSync(tempRestorePath, sql, 'utf8');
 
-    // 1. Force drop and recreate database
-    const tempPool = new Pool({
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      host: process.env.DB_HOST,
-      port: process.env.DB_PORT,
-      database: 'postgres',
-    });
+    // Run core restore engine using the file path
+    await runCoreRestore(tempRestorePath);
 
+    // Cleanup temp restore file
     try {
-      // Terminate any active connections to the database
-      await tempPool.query(`
-        SELECT pg_terminate_backend(pg_stat_activity.pid)
-        FROM pg_stat_activity
-        WHERE pg_stat_activity.datname = $1
-          AND pid <> pg_backend_pid()
-      `, [dbName]);
-
-      // Drop database
-      await tempPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
-      
-      // Create database
-      await tempPool.query(`CREATE DATABASE "${dbName}"`);
-      console.log(`✅ Database "${dbName}" recreated successfully during restore.`);
-
-      // Initialize clean schema
-      const schemaPath = path.join(__dirname, '..', 'schema.sql');
-      if (fs.existsSync(schemaPath)) {
-        const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-        const newDbPool = new Pool({
-          user: process.env.DB_USER,
-          password: process.env.DB_PASSWORD,
-          host: process.env.DB_HOST,
-          port: process.env.DB_PORT,
-          database: dbName,
-        });
-        await newDbPool.query(schemaSql);
-        await newDbPool.end();
-        console.log(`✅ Initialized clean schema migrations successfully.`);
-      }
-    } catch (dbErr) {
-      console.error('Failed to recreate database on restore:', dbErr);
-      throw dbErr;
-    } finally {
-      await tempPool.end();
-    }
-
-    // 2. Programmatically clean the SQL to filter out database drop/creation/connections
-    const cleanedSql = sql
-      .split('\n')
-      .filter(line => {
-        const trimmed = line.trim().toLowerCase();
-        return !(
-          trimmed.startsWith('create database ') ||
-          trimmed.startsWith('drop database ') ||
-          trimmed.startsWith('alter database ') ||
-          trimmed.startsWith('\\c ') ||
-          trimmed.startsWith('\\connect ')
-        );
-      })
-      .join('\n');
-
-    // 3. Ensure 'created_at' exists on tables (handles older schemas) before running the cleaned SQL script
-    const tablesWithCreatedAt = ['jobbers', 'sellers', 'vendors', 'transactions_in', 'transactions_out', 'jobber_adjustments', 'seller_adjustments', 'material_transfers'];
-    for (const table of tablesWithCreatedAt) {
-      try {
-        await db.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
-      } catch (err) {
-        console.warn(`Could not add created_at to ${table}:`, err.message);
-      }
-    }
-
-    // 3.5 Ensure opening balance columns exist for jobbers
-    try {
-      await db.query(`ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_stock_type1 NUMERIC DEFAULT 0`);
-      await db.query(`ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_stock_type2 NUMERIC DEFAULT 0`);
-      await db.query(`ALTER TABLE jobbers ADD COLUMN IF NOT EXISTS opening_amount NUMERIC DEFAULT 0`);
-    } catch (err) {
-      console.warn(`Could not add opening balance columns to jobbers:`, err.message);
-    }
-
-    // 4. Wipe existing data to ensure we create a new database state instead of merging
-    try {
-      const tableListRes = await db.query(`
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-          AND table_type = 'BASE TABLE'
-      `);
-      const tablesToWipe = tableListRes.rows.map(r => `"${r.table_name}"`);
-      if (tablesToWipe.length > 0) {
-        await db.query(`TRUNCATE TABLE ${tablesToWipe.join(', ')} RESTART IDENTITY CASCADE;`);
-      }
-    } catch (err) {
-      console.warn('Could not truncate all tables before restore:', err.message);
-    }
-
-    // 5. Run the cleaned SQL script inside the database connection
-    await db.query(cleanedSql);
+      if (fs.existsSync(tempRestorePath)) fs.unlinkSync(tempRestorePath);
+    } catch (_) {}
 
     res.json({ success: true, message: 'Database restored successfully' });
   } catch (err) {
+    // Cleanup temp restore file on failure
+    try {
+      if (fs.existsSync(tempRestorePath)) fs.unlinkSync(tempRestorePath);
+    } catch (_) {}
+
     console.error('Error restoring database:', err);
-    res.status(500).json({ error: 'Failed to restore database from backup file' });
+    res.status(500).json({ error: err.message || 'Failed to restore database from backup file' });
   }
 };
 
 // Automatic background backup worker trigger
 exports.triggerAutoBackupIfNeeded = async () => {
   try {
+    if (global.isBackupRestoreRunning) {
+      console.log('[Auto-Backup] Skipped background backup because backup/restore is currently running.');
+      return;
+    }
+
     const config = readConfig();
     if (!config.enabled) return;
 
@@ -584,20 +713,29 @@ exports.triggerAutoBackupIfNeeded = async () => {
 
     if (elapsedMinutes >= config.interval) {
       console.log(`[Auto-Backup] Starting background backup (${config.backupType === 'ftp' ? 'FTP remote' : 'Local drive'})...`);
-      const sql = await generateBackupSql();
       const dateStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
       const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
       const filename = `AutoBackup-${dateStr}--${timeStr}.sql`;
 
       if (config.backupType === 'ftp') {
+        const tempDir = path.join(__dirname, '..', 'temp');
+        if (!fs.existsSync(tempDir)) {
+          fs.mkdirSync(tempDir, { recursive: true });
+        }
+        const tempPath = path.join(tempDir, `auto_backup_ftp_${Date.now()}.sql`);
         try {
-          await uploadBackupToFtp(config, filename, sql);
+          await runCoreBackup(tempPath);
+          await uploadBackupToFtp(config, filename, tempPath);
           console.log(`[Auto-Backup] Successfully uploaded backup to FTP: ${filename}`);
           config.lastBackup = now.toISOString();
           config.lastFile = filename;
           writeConfig(config);
         } catch (ftpErr) {
           console.warn(`[Auto-Backup] Failed to upload auto-backup to FTP:`, ftpErr.message);
+        } finally {
+          if (fs.existsSync(tempPath)) {
+            try { fs.unlinkSync(tempPath); } catch (_) {}
+          }
         }
       } else {
         // Local logic
@@ -615,20 +753,21 @@ exports.triggerAutoBackupIfNeeded = async () => {
           return;
         }
 
-        if (config.lastFile) {
-          try {
-            const oldPath = path.join(config.path, config.lastFile);
-            if (fs.existsSync(oldPath)) {
-              fs.unlinkSync(oldPath);
-            }
-          } catch (unlinkErr) {
-            console.warn('[Auto-Backup] Failed to unlink old auto-backup file:', unlinkErr.message);
-          }
-        }
-
         const fullPath = path.join(config.path, filename);
         try {
-          fs.writeFileSync(fullPath, sql, 'utf8');
+          await runCoreBackup(fullPath);
+          
+          if (config.lastFile && config.lastFile !== filename) {
+            try {
+              const oldPath = path.join(config.path, config.lastFile);
+              if (fs.existsSync(oldPath)) {
+                fs.unlinkSync(oldPath);
+              }
+            } catch (unlinkErr) {
+              console.warn('[Auto-Backup] Failed to unlink old auto-backup file:', unlinkErr.message);
+            }
+          }
+
           console.log(`[Auto-Backup] Successfully saved backup locally: ${fullPath}`);
           config.lastBackup = now.toISOString();
           config.lastFile = filename;
@@ -642,3 +781,7 @@ exports.triggerAutoBackupIfNeeded = async () => {
     console.warn('[Auto-Backup] Background auto-backup failed:', err.message);
   }
 };
+
+exports.runCoreBackup = runCoreBackup;
+exports.runCoreRestore = runCoreRestore;
+
