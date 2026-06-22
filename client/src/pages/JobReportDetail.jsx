@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
-import { ArrowLeft, TrendingUp, TrendingDown, Box, Plus, IndianRupee, Pencil } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Box, Plus, IndianRupee, Pencil, FileText } from 'lucide-react';
 import DataTable, { EditCombobox } from '../components/DataTable';
 import EditMasterModal from '../components/EditMasterModal';
 import API_BASE_URL from '../config';
@@ -70,6 +70,13 @@ const getLocalDateParts = (dateStr) => {
   return { month: d.getMonth(), year: d.getFullYear(), day: d.getDate() };
 };
 
+const formatNumberMax4Decimals = (val) => {
+  if (val === undefined || val === null || val === '---') return val;
+  const num = Number(val);
+  if (isNaN(num)) return val;
+  return Number(num.toFixed(4));
+};
+
 const prepareTableData = (data, month, year, openingStock = null, txType = 'IN') => {
   if (!data) return [];
   
@@ -77,6 +84,12 @@ const prepareTableData = (data, month, year, openingStock = null, txType = 'IN')
     const dateParts = getLocalDateParts(item.date);
     return {
       ...item,
+      type1: item.type1 !== undefined && item.type1 !== '---' ? formatNumberMax4Decimals(item.type1) : item.type1,
+      type2: item.type2 !== undefined && item.type2 !== '---' ? formatNumberMax4Decimals(item.type2) : item.type2,
+      type1_b: item.type1_b !== undefined && item.type1_b !== '---' ? formatNumberMax4Decimals(item.type1_b) : item.type1_b,
+      type2_b: item.type2_b !== undefined && item.type2_b !== '---' ? formatNumberMax4Decimals(item.type2_b) : item.type2_b,
+      rate: item.rate !== undefined && item.rate !== '---' ? formatNumberMax4Decimals(item.rate) : item.rate,
+      amount: item.amount !== undefined && item.amount !== '---' ? formatNumberMax4Decimals(item.amount) : item.amount,
       _month: item._month ?? dateParts.month,
       _year: item._year ?? dateParts.year
     };
@@ -103,16 +116,16 @@ const prepareTableData = (data, month, year, openingStock = null, txType = 'IN')
   // Intermediate Total Row
   result.push({
     id: `mat-total-${month}-${year}`,
-    type1: matTotals.type1,
-    type1_b: matTotals.type1_b,
-    type2: matTotals.type2,
-    type2_b: matTotals.type2_b,
+    type1: formatNumberMax4Decimals(matTotals.type1),
+    type1_b: formatNumberMax4Decimals(matTotals.type1_b),
+    type2: formatNumberMax4Decimals(matTotals.type2),
+    type2_b: formatNumberMax4Decimals(matTotals.type2_b),
     material: '---',
     rate: '---',
     vendor: '---',
     seller: '---',
     remark: 'GROSS TOTAL',
-    amount: matTotals.amount,
+    amount: formatNumberMax4Decimals(matTotals.amount),
     isTotal: true,
     isTotalHeader: true // to distinguish if needed
   });
@@ -495,6 +508,10 @@ export default function JobReportDetail() {
     return acc;
   }, { ...baseOpening });
 
+  // Format opening stock to max 4 decimal places
+  openingStock.type1 = formatNumberMax4Decimals(openingStock.type1);
+  openingStock.type2 = formatNumberMax4Decimals(openingStock.type2);
+
   // Calculate net for the current selected month
   const currentNet = allTransactions.reduce((acc, tx) => {
     const dateParts = getLocalDateParts(tx.date);
@@ -513,8 +530,8 @@ export default function JobReportDetail() {
   }, { type1: 0, type2: 0 });
 
   const closingStock = {
-    type1: openingStock.type1 + currentNet.type1,
-    type2: openingStock.type2 + currentNet.type2
+    type1: formatNumberMax4Decimals(openingStock.type1 + currentNet.type1),
+    type2: formatNumberMax4Decimals(openingStock.type2 + currentNet.type2)
   };
 
   // Calculate Dynamic Opening/Closing Financial Balances (Amounts)
@@ -553,6 +570,34 @@ export default function JobReportDetail() {
   const outTransactions = allTransactions
     .filter(t => t.tx_type === 'OUT' || t.tx_type === 'OUT_ADJ' || t.tx_type === 'TRANSFER_OUT')
     .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  // Calculate total inward for the selected month/year
+  const monthlyInTransactions = inTransactions.filter(r => {
+    const dateParts = getLocalDateParts(r.date);
+    return dateParts.month === activeMonth && dateParts.year === selectedYear;
+  });
+  const totalInward = monthlyInTransactions.reduce((acc, row) => {
+    acc.type1 += (Number(row.type1) || 0);
+    acc.type2 += (Number(row.type2) || 0);
+    return acc;
+  }, { type1: 0, type2: 0 });
+
+  // Calculate total outward for the selected month/year (excluding adjustments OUT_ADJ as in the gross total of the outward entry)
+  const monthlyOutTransactions = outTransactions.filter(r => {
+    const dateParts = getLocalDateParts(r.date);
+    return dateParts.month === activeMonth && dateParts.year === selectedYear;
+  });
+  const monthlyOutMaterialRows = monthlyOutTransactions.filter(r => r.tx_type !== 'OUT_ADJ');
+  const totalOutward = monthlyOutMaterialRows.reduce((acc, row) => {
+    acc.type1 += (Number(row.type1) || 0);
+    acc.type2 += (Number(row.type2) || 0);
+    acc.amount += (Number(row.amount) || 0);
+    return acc;
+  }, { type1: 0, type2: 0, amount: 0 });
+
+  // Calculate total payments/adjustments (OUT_ADJ) for the selected month/year
+  const monthlyAdjustments = monthlyOutTransactions.filter(r => r.tx_type === 'OUT_ADJ');
+  const totalPayment = monthlyAdjustments.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
 
   // Month filtering years
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
@@ -669,9 +714,17 @@ export default function JobReportDetail() {
            >
              <TrendingDown size={14} /> Material Outward (OUT)
            </button>
+           <button 
+             onClick={() => setActiveTab('REPORTS')} 
+             className={`px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-all ${
+               activeTab === 'REPORTS' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-white border border-[#E2E8F0] text-[#64748B] hover:bg-[#F8FAFC]'
+             }`}
+           >
+             <FileText size={14} /> Reports
+           </button>
         </div>
 
-        {activeTab === 'IN' ? (
+        {activeTab === 'IN' && (
           <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm flex flex-col shrink-0">
             <div className="px-4 py-2 bg-[#F1F5F9] border-b border-[#E2E8F0] flex items-center justify-between">
               <h3 className="text-xs font-bold text-[#0F172A] flex items-center gap-2">
@@ -687,7 +740,7 @@ export default function JobReportDetail() {
             <div className="overflow-x-auto">
               <DataTable 
                 columns={IN_COLUMNS}
-                initialData={prepareTableData(inTransactions, activeMonth, selectedYear, openingStock, 'IN')}
+                initialData={prepareTableData(inTransactions, activeMonth, selectedYear, null, 'IN')}
                 comboboxFields={{ 
                   seller: masters.sellers.map(s => s.name), 
                   jobber: masters.jobbers.map(j => j.name)
@@ -700,7 +753,9 @@ export default function JobReportDetail() {
               />
             </div>
           </div>
-        ) : (
+        )}
+
+        {activeTab === 'OUT' && (
           <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm flex flex-col shrink-0">
             <div className="px-4 py-2 bg-[#F1F5F9] border-b border-[#E2E8F0] flex items-center justify-between">
               <h3 className="text-xs font-bold text-[#0F172A] flex items-center gap-2">
@@ -725,7 +780,7 @@ export default function JobReportDetail() {
             <div className="overflow-x-auto">
               <DataTable 
                 columns={OUT_COLUMNS}
-                initialData={prepareTableData(outTransactions, activeMonth, selectedYear, openingStock, 'OUT')}
+                initialData={prepareTableData(outTransactions, activeMonth, selectedYear, null, 'OUT')}
                 comboboxFields={{ 
                   vendor: masters.vendors.map(v => v.name),
                   jobber: masters.jobbers.map(j => j.name)
@@ -736,6 +791,99 @@ export default function JobReportDetail() {
                 hideFilters={true}
                 noVerticalScroll={true}
               />
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'REPORTS' && (
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm flex flex-col shrink-0">
+            <div className="px-4 py-2 bg-[#F1F5F9] border-b border-[#E2E8F0] flex items-center justify-between">
+              <h3 className="text-xs font-bold text-[#0F172A] flex items-center gap-2">
+                <FileText size={14} className="text-[#2563EB]" /> Summary Report ({MONTHS[activeMonth]} {selectedYear})
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-[#334155] text-white">
+                    <th className="px-4 py-2 text-center text-xs font-semibold tracking-wide border-r border-[#475569] whitespace-nowrap">Particulars</th>
+                    <th className="px-4 py-2 text-center text-xs font-semibold tracking-wide border-r border-[#475569] whitespace-nowrap">Type 1</th>
+                    <th className="px-4 py-2 text-center text-xs font-semibold tracking-wide border-r border-[#475569] whitespace-nowrap">Type 2</th>
+                    <th className="px-4 py-2 text-center text-xs font-semibold tracking-wide whitespace-nowrap">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Row 1: Opening Stock */}
+                  <tr className="border-b border-[#E2E8F0] hover:bg-[#F8FAFC]">
+                    <td className="px-4 py-2.5 font-bold text-[#0F172A] border-r border-[#E2E8F0] text-center">Opening Stock</td>
+                    <td className="px-4 py-2.5 font-mono text-center text-[#0F172A] border-r border-[#E2E8F0]">
+                      {openingStock.type1 !== undefined && openingStock.type1 !== null ? `${openingStock.type1}kg` : '0kg'}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-center text-[#0F172A] border-r border-[#E2E8F0]">
+                      {openingStock.type2 !== undefined && openingStock.type2 !== null ? `${openingStock.type2}kg` : '0kg'}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono font-semibold text-center text-violet-600">
+                      ₹{openingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+
+                  {/* Row 2: Total Inward */}
+                  <tr className="border-b border-[#E2E8F0] hover:bg-[#F8FAFC]">
+                    <td className="px-4 py-2.5 font-bold text-[#0F172A] border-r border-[#E2E8F0] text-center">Total Inward</td>
+                    <td className="px-4 py-2.5 font-mono text-center text-[#0F172A] border-r border-[#E2E8F0]">
+                      {totalInward.type1 !== undefined && totalInward.type1 !== null ? `${formatNumberMax4Decimals(totalInward.type1)}kg` : '0kg'}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-center text-[#0F172A] border-r border-[#E2E8F0]">
+                      {totalInward.type2 !== undefined && totalInward.type2 !== null ? `${formatNumberMax4Decimals(totalInward.type2)}kg` : '0kg'}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-center text-slate-400">
+                      ---
+                    </td>
+                  </tr>
+
+                  {/* Row 3: Total Outward */}
+                  <tr className="border-b border-[#E2E8F0] hover:bg-[#F8FAFC]">
+                    <td className="px-4 py-2.5 font-bold text-[#0F172A] border-r border-[#E2E8F0] text-center">Total Outward</td>
+                    <td className="px-4 py-2.5 font-mono text-center text-[#0F172A] border-r border-[#E2E8F0]">
+                      {totalOutward.type1 !== undefined && totalOutward.type1 !== null ? `${formatNumberMax4Decimals(totalOutward.type1)}kg` : '0kg'}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-center text-[#0F172A] border-r border-[#E2E8F0]">
+                      {totalOutward.type2 !== undefined && totalOutward.type2 !== null ? `${formatNumberMax4Decimals(totalOutward.type2)}kg` : '0kg'}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono font-semibold text-center text-[#0F172A]">
+                      ₹{totalOutward.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+
+                  {/* Row 4: Total Payment */}
+                  <tr className="border-b border-[#E2E8F0] hover:bg-[#F8FAFC]">
+                    <td className="px-4 py-2.5 font-bold text-[#0F172A] border-r border-[#E2E8F0] text-center">Total Payment</td>
+                    <td className="px-4 py-2.5 font-mono text-center text-slate-400 border-r border-[#E2E8F0]">
+                      ---
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-center text-slate-400 border-r border-[#E2E8F0]">
+                      ---
+                    </td>
+                    <td className="px-4 py-2.5 font-mono font-semibold text-center text-rose-600">
+                      ₹{totalPayment.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+
+                  {/* Row 5: Closing Stock */}
+                  <tr className="bg-slate-50 font-bold border-b border-[#E2E8F0] hover:bg-[#F1F5F9]">
+                    <td className="px-4 py-2.5 text-[#0F172A] border-r border-[#E2E8F0] text-center">Closing Stock</td>
+                    <td className="px-4 py-2.5 font-mono text-center text-[#0F172A] border-r border-[#E2E8F0]">
+                      {formatNumberMax4Decimals((openingStock.type1 || 0) + (totalInward.type1 || 0) - (totalOutward.type1 || 0))}kg
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-center text-[#0F172A] border-r border-[#E2E8F0]">
+                      {formatNumberMax4Decimals((openingStock.type2 || 0) + (totalInward.type2 || 0) - (totalOutward.type2 || 0))}kg
+                    </td>
+                    <td className="px-4 py-2.5 font-mono font-bold text-center text-violet-600">
+                      ₹{(openingAmount + (totalOutward.amount || 0) - (totalPayment || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         )}
