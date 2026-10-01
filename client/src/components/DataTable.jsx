@@ -345,6 +345,7 @@ export default function DataTable({
   const [activeMonth, setActiveMonth]   = useState(currentMonth);
   const [rows, setRows]                 = useState(initialData);
   const [editingId, setEditingId]       = useState(null);
+  const [expandedGroups, setExpandedGroups] = useState({});
 
   // Helper to generate a globally unique ID for UI state (solves collisions between IN and ADJ tables)
   const getUniqueId = (r) => (r.tx_type ? `${r.tx_type}-${r.id}` : r.id);
@@ -655,6 +656,13 @@ export default function DataTable({
     }
   };
 
+  const displayRows = filteredRows.filter(row => {
+    if (row.isGroupedItem) {
+      return expandedGroups[row.groupId];
+    }
+    return true;
+  });
+
   const tableEl = (
     <table className="min-w-full text-sm border-collapse">
       {/* sticky header */}
@@ -672,17 +680,18 @@ export default function DataTable({
       </thead>
 
       <tbody>
-        {filteredRows.map((row, idx) => {
+        {displayRows.map((row, idx) => {
           const uniqueRowId = getUniqueId(row);
           const isEditing = editingId === uniqueRowId;
+          let baseBg = idx % 2 === 0 ? 'bg-white hover:bg-[#F1F5F9]' : 'bg-[#F8FAFC] hover:bg-[#F1F5F9]';
+          if (row.isGroupedItem) baseBg = 'bg-slate-50 hover:bg-[#F1F5F9]';
+          
           const rowCls = `border-b border-[#E2E8F0] transition-colors ${
-            row.isTotal
-              ? 'bg-slate-50 font-bold'
+            row.isTotal || row.isGroupHeader
+              ? 'bg-slate-100 font-bold'
               : isEditing
                 ? 'bg-[#EFF6FF] ring-2 ring-inset ring-[#93C5FD]'
-                : idx % 2 === 0
-                  ? 'bg-white hover:bg-[#F1F5F9]'
-                  : 'bg-[#F8FAFC] hover:bg-[#F1F5F9]'
+                : baseBg
           }`;
 
           return (
@@ -690,16 +699,24 @@ export default function DataTable({
               key={uniqueRowId}
               ref={isEditing ? editRowRef : null}
               className={rowCls}
+              onClick={row.isGroupHeader ? () => setExpandedGroups(p => ({...p, [row.groupId]: !p[row.groupId]})) : undefined}
+              style={row.isGroupHeader ? { cursor: 'pointer' } : {}}
             >
               {/* # */}
               <td className="px-3 py-1.5 text-[#64748B] border-r border-[#E2E8F0] w-8 text-center font-mono text-xs">
-                {idx + 1}
+                {row.isGroupHeader ? (
+                   expandedGroups[row.groupId] ? '▼' : '▶'
+                ) : (
+                   row.isGroupedItem ? '' : idx + 1
+                )}
               </td>
 
               {/* Actions */}
               <td className="px-3 py-1.5 border-r border-[#E2E8F0] whitespace-nowrap text-center w-[80px]">
                 {row.isTotal ? (
                   <span className="font-bold text-[#0F172A] text-xs">{row.actionLabel || 'TOTAL'}</span>
+                ) : row.isGroupHeader ? (
+                  <span className="font-bold text-[#0F172A] text-xs">GROUP</span>
                 ) : (
                   <div className="flex items-center justify-center gap-1.5">
                     {isEditing ? (

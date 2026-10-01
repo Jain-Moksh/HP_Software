@@ -111,7 +111,52 @@ const prepareTableData = (data, month, year, openingStock = null, txType = 'IN')
     return acc;
   }, { type1: 0, type1_b: 0, type2: 0, type2_b: 0, amount: 0 });
 
-  const result = [...materialRows];
+  let result = [];
+
+  if (txType === 'OUT') {
+    const groups = {};
+    materialRows.forEach(r => {
+      const mat = r.material || 'Unknown';
+      if (!groups[mat]) {
+        groups[mat] = {
+           id: `group-${mat}-${month}-${year}`,
+           material: mat,
+           type1: 0,
+           type1_b: 0,
+           type2: 0,
+           type2_b: 0,
+           amount: 0,
+           isGroupHeader: true,
+           groupId: mat,
+           items: [],
+           readOnly: true
+        };
+      }
+      groups[mat].type1 += Number(r.type1) || 0;
+      groups[mat].type1_b += Number(r.type1_b) || 0;
+      groups[mat].type2 += Number(r.type2) || 0;
+      groups[mat].type2_b += Number(r.type2_b) || 0;
+      groups[mat].amount += Number(r.amount) || 0;
+      
+      groups[mat].items.push({ ...r, groupId: mat, isGroupedItem: true });
+    });
+    
+    Object.values(groups).forEach(g => {
+       g.type1 = formatNumberMax4Decimals(g.type1);
+       g.type1_b = formatNumberMax4Decimals(g.type1_b);
+       g.type2 = formatNumberMax4Decimals(g.type2);
+       g.type2_b = formatNumberMax4Decimals(g.type2_b);
+       g.amount = formatNumberMax4Decimals(g.amount);
+       g.rate = '---';
+       g.vendor = '---';
+       g.date = '---';
+       g.remark = `${g.items.length} items`;
+       result.push(g);
+       result.push(...g.items);
+    });
+  } else {
+    result = [...materialRows];
+  }
 
   // Intermediate Total Row
   result.push({
