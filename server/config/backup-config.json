@@ -1,6 +1,6 @@
 {
   "enabled": true,
-  "interval": 1,
+  "interval": 1439,
   "path": "C:/Moksh Software",
   "backupType": "ftp",
   "ftpHost": "192.168.1.1",
@@ -8,7 +8,7 @@
   "ftpUser": "admin",
   "ftpPassword": "2243",
   "ftpSecure": false,
-  "ftpPath": "/usb1_1_1/entry/",
-  "lastBackup": "2026-06-22T07:29:20.807Z",
-  "lastFile": "AutoBackup-22-06-2026--12-59.sql"
+  "ftpPath": "/usb1_1_1/entry",
+  "lastBackup": "2026-07-04T10:42:02.227Z",
+  "lastFile": "AutoBackup-04-07-2026--16-12.sql"
 }
